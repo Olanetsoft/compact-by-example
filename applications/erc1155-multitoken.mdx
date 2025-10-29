@@ -1,0 +1,532 @@
+---
+title: "Multi-Token Standard (ERC1155)"
+sidebarTitle: "ERC1155 Multi-Token"
+description: "Manage multiple token types in a single contract on Midnight. Learn batch operations, fungible and non-fungible tokens together, and efficient token management."
+"og:title": "ERC1155 Multi-Token Tutorial - Compact by Example"
+"og:description": "Build multi-token contracts on Midnight with mixed fungible and non-fungible tokens"
+---
+
+<Info>
+  **What You'll Learn**: Multiple token types • Mixed fungible/non-fungible •
+  Balance tracking by ID • Batch limitations • Operator approvals
+</Info>
+
+## Introduction
+
+The Multi-Token Standard (ERC1155) allows a single contract to manage multiple token types. You can have fungible tokens (like currencies), non-fungible tokens (like collectibles), and semi-fungible tokens (like game items that stack) all in one contract.
+
+<Tip>
+  **Real-world use**: Game items (100 swords, 50 shields, unique legendary
+  weapon), trading card collections, multi-currency wallets, event tickets with
+  different tiers, or any system needing multiple token types.
+</Tip>
+
+## The Contract
+
+<Accordion title="View Contract Code">
+
+```compact
+pragma language_version >= 0.17.0;
+
+import CompactStandardLibrary;
+
+// Balances per token ID per account
+export ledger _balances: Map<Uint<128>, Map<Either<ZswapCoinPublicKey, ContractAddress>, Uint<128>>>;
+
+// Operator approvals (all-or-nothing)
+export ledger _operatorApprovals: Map<Either<ZswapCoinPublicKey, ContractAddress>, Map<Either<ZswapCoinPublicKey, ContractAddress>, Boolean>>;
+
+// Token metadata URIs
+export ledger _uris: Map<Uint<128>, Opaque<"string">>;
+
+// Get balance of account for token ID
+export circuit balanceOf(
+    account: Either<ZswapCoinPublicKey, ContractAddress>,
+    id: Uint<128>
+): Uint<128> {
+    if (!_balances.member(disclose(id))) {
+        return 0;
+    }
+
+    const accountBalances = _balances.lookup(disclose(id));
+    if (!accountBalances.member(disclose(account))) {
+        return 0;
+    }
+
+    return accountBalances.lookup(disclose(account));
+}
+
+// Set operator approval for all token types
+export circuit setApprovalForAll(
+    operator: Either<ZswapCoinPublicKey, ContractAddress>,
+    approved: Boolean
+): [] {
+    const owner = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
+    _setApprovalForAll(owner, operator, approved);
+}
+
+// Check if operator is approved
+export circuit isApprovedForAll(
+    account: Either<ZswapCoinPublicKey, ContractAddress>,
+    operator: Either<ZswapCoinPublicKey, ContractAddress>
+): Boolean {
+    if (_operatorApprovals.member(disclose(account)) &&
+        _operatorApprovals.lookup(account).member(disclose(operator))) {
+        return _operatorApprovals.lookup(account).lookup(disclose(operator));
+    }
+    return false;
+}
+
+// Transfer single token type
+export circuit safeTransferFrom(
+    from: Either<ZswapCoinPublicKey, ContractAddress>,
+    to: Either<ZswapCoinPublicKey, ContractAddress>,
+    id: Uint<128>,
+    value: Uint<128>
+): [] {
+    const caller = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
+    assert(from == caller || isApprovedForAll(from, caller), "Not authorized");
+    assert(!isKeyOrAddressZero(to), "Invalid receiver");
+
+    _update(from, to, id, value);
+}
+
+// Get token URI
+export circuit uri(tokenId: Uint<128>): Opaque<"string"> {
+    if (!_uris.member(disclose(tokenId))) {
+        return ""; // Empty string
+    }
+    return _uris.lookup(disclose(tokenId));
+}
+
+// Mint tokens
+export circuit _mint(
+    to: Either<ZswapCoinPublicKey, ContractAddress>,
+    id: Uint<128>,
+    value: Uint<128>
+): [] {
+    assert(!isKeyOrAddressZero(to), "Invalid receiver");
+    _update(burnAddress(), to, id, value);
+}
+
+// Burn tokens
+export circuit _burn(
+    from: Either<ZswapCoinPublicKey, ContractAddress>,
+    id: Uint<128>,
+    value: Uint<128>
+): [] {
+    assert(!isKeyOrAddressZero(from), "Invalid sender");
+    _update(from, burnAddress(), id, value);
+}
+
+// Set token URI
+export circuit _setURI(id: Uint<128>, newuri: Opaque<"string">): [] {
+    _uris.insert(disclose(id), disclose(newuri));
+}
+
+// Internal functions
+
+circuit _update(
+    from: Either<ZswapCoinPublicKey, ContractAddress>,
+    to: Either<ZswapCoinPublicKey, ContractAddress>,
+    id: Uint<128>,
+    value: Uint<128>
+): [] {
+    if (!isKeyOrAddressZero(disclose(from))) {
+        const fromBalance = balanceOf(from, id);
+        assert(fromBalance >= value, "Insufficient balance");
+
+        const newBalance = fromBalance - value;
+        if (!_balances.member(disclose(id))) {
+            _balances.insert(disclose(id), default<Map<Either<ZswapCoinPublicKey, ContractAddress>, Uint<128>>>);
+        }
+        _balances.lookup(id).insert(disclose(from), disclose(newBalance));
+    }
+
+    if (!isKeyOrAddressZero(disclose(to))) {
+        const toBalance = balanceOf(to, id);
+
+        // Check overflow
+        const MAX_UINT128 = 340282366920938463463374607431768211455 as Uint<128>;
+        assert(toBalance <= MAX_UINT128 - value, "Balance overflow");
+
+        const newBalance = toBalance + value;
+        if (!_balances.member(disclose(id))) {
+            _balances.insert(disclose(id), default<Map<Either<ZswapCoinPublicKey, ContractAddress>, Uint<128>>>);
+        }
+        _balances.lookup(id).insert(disclose(to), disclose(newBalance));
+    }
+}
+
+circuit _setApprovalForAll(
+    owner: Either<ZswapCoinPublicKey, ContractAddress>,
+    operator: Either<ZswapCoinPublicKey, ContractAddress>,
+    approved: Boolean
+): [] {
+    assert(owner != operator, "Cannot approve self");
+
+    if (!_operatorApprovals.member(disclose(owner))) {
+        _operatorApprovals.insert(disclose(owner), default<Map<Either<ZswapCoinPublicKey, ContractAddress>, Boolean>>);
+    }
+
+    _operatorApprovals.lookup(owner).insert(disclose(operator), disclose(approved));
+}
+
+// Helper functions
+circuit isKeyOrAddressZero(addr: Either<ZswapCoinPublicKey, ContractAddress>): Boolean {
+    return false; // Simplified - implement your zero check
+}
+
+circuit burnAddress(): Either<ZswapCoinPublicKey, ContractAddress> {
+    // Return your burn address
+    return left<ZswapCoinPublicKey, ContractAddress>(/* zero key */);
+}
+```
+
+</Accordion>
+
+## How It Works
+
+### Multi-Token Balance Structure
+
+```compact
+export ledger _balances: Map<Uint<128>, Map<Either<ZswapCoinPublicKey, ContractAddress>, Uint<128>>>;
+
+export circuit balanceOf(
+    account: Either<ZswapCoinPublicKey, ContractAddress>,
+    id: Uint<128>
+): Uint<128> {
+    if (!_balances.member(disclose(id))) {
+        return 0;
+    }
+
+    const accountBalances = _balances.lookup(disclose(id));
+    if (!accountBalances.member(disclose(account))) {
+        return 0;
+    }
+
+    return accountBalances.lookup(disclose(account));
+}
+```
+
+The nested map structure is key:
+
+- **Outer Map**: Token ID → Inner Map
+- **Inner Map**: Account → Balance
+
+This means:
+
+- Token ID 1 (Gold Coins): Alice has 100, Bob has 50
+- Token ID 2 (Silver Coins): Alice has 200, Charlie has 75
+- Token ID 3 (Legendary Sword): Dave has 1 (NFT)
+
+<Note>
+  **Design Pattern**: The nested map allows efficient lookup of any account's
+  balance for any token type. Each token ID is independent.
+</Note>
+
+### Token Types in One Contract
+
+```compact
+// Fungible tokens (many copies)
+_mint(alice, 1, 1000); // Alice gets 1000 Gold Coins (ID 1)
+_mint(bob, 1, 500);    // Bob gets 500 Gold Coins (ID 1)
+
+// Non-fungible token (unique)
+_mint(charlie, 100, 1); // Charlie gets unique Legendary Sword (ID 100)
+
+// Semi-fungible tokens (limited supply)
+_mint(dave, 50, 10);   // Dave gets 10 Common Shields (ID 50)
+```
+
+All three token types coexist in the same contract:
+
+- **Fungible** (ID 1): Gold coins - mint unlimited amounts
+- **NFT** (ID 100): Legendary sword - only 1 exists
+- **Semi-fungible** (ID 50): Shields - limited quantity (10)
+
+<Tip>
+  **Game Design**: Use ID ranges for organization: - IDs 1-999: Currencies and
+  resources - IDs 1000-9999: Common items - IDs 10000+: Unique legendary items
+</Tip>
+
+### Operator Approvals
+
+```compact
+export circuit setApprovalForAll(
+    operator: Either<ZswapCoinPublicKey, ContractAddress>,
+    approved: Boolean
+): [] {
+    const owner = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
+    _setApprovalForAll(owner, operator, approved);
+}
+
+export circuit isApprovedForAll(
+    account: Either<ZswapCoinPublicKey, ContractAddress>,
+    operator: Either<ZswapCoinPublicKey, ContractAddress>
+): Boolean {
+    if (_operatorApprovals.member(disclose(account)) &&
+        _operatorApprovals.lookup(account).member(disclose(operator))) {
+        return _operatorApprovals.lookup(account).lookup(disclose(operator));
+    }
+    return false;
+}
+```
+
+Unlike ERC721, ERC1155 only has operator approval (all-or-nothing):
+
+- **Approve**: Operator can transfer ANY token type you own
+- **No single token approval**: Can't approve just one token ID
+
+This is simpler but less granular than ERC721.
+
+### Transfers
+
+```compact
+export circuit safeTransferFrom(
+    from: Either<ZswapCoinPublicKey, ContractAddress>,
+    to: Either<ZswapCoinPublicKey, ContractAddress>,
+    id: Uint<128>,
+    value: Uint<128>
+): [] {
+    const caller = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
+    assert(from == caller || isApprovedForAll(from, caller), "Not authorized");
+    assert(!isKeyOrAddressZero(to), "Invalid receiver");
+
+    _update(from, to, id, value);
+}
+
+circuit _update(
+    from: Either<ZswapCoinPublicKey, ContractAddress>,
+    to: Either<ZswapCoinPublicKey, ContractAddress>,
+    id: Uint<128>,
+    value: Uint<128>
+): [] {
+    if (!isKeyOrAddressZero(disclose(from))) {
+        const fromBalance = balanceOf(from, id);
+        assert(fromBalance >= value, "Insufficient balance");
+
+        const newBalance = fromBalance - value;
+        if (!_balances.member(disclose(id))) {
+            _balances.insert(disclose(id), default<Map<Either<ZswapCoinPublicKey, ContractAddress>, Uint<128>>>);
+        }
+        _balances.lookup(id).insert(disclose(from), disclose(newBalance));
+    }
+
+    if (!isKeyOrAddressZero(disclose(to))) {
+        const toBalance = balanceOf(to, id);
+        const MAX_UINT128 = 340282366920938463463374607431768211455 as Uint<128>;
+        assert(toBalance <= MAX_UINT128 - value, "Balance overflow");
+
+        const newBalance = toBalance + value;
+        if (!_balances.member(disclose(id))) {
+            _balances.insert(disclose(id), default<Map<Either<ZswapCoinPublicKey, ContractAddress>, Uint<128>>>);
+        }
+        _balances.lookup(id).insert(disclose(to), disclose(newBalance));
+    }
+}
+```
+
+Transfer process:
+
+1. Verify caller is owner or approved operator
+2. Check sufficient balance for token ID
+3. Decrease sender's balance
+4. Increase receiver's balance (with overflow check)
+
+You can transfer partial amounts (10 gold coins) or single units (1 legendary sword).
+
+### Batch Operations Limitation
+
+<Warning>
+**Compact Limitation**: Standard ERC1155 includes batch operations (`balanceOfBatch`, `safeBatchTransferFrom`) for gas efficiency. However, **Compact doesn't support dynamic arrays yet**, so batch operations are not possible.
+
+You must transfer tokens one at a time:
+
+```compact
+// ❌ Can't do this (no dynamic arrays):
+safeTransferFrom(from, to, [1, 2, 3], [100, 50, 10]);
+
+// ✅ Do this instead:
+safeTransferFrom(from, to, 1, 100);
+safeTransferFrom(from, to, 2, 50);
+safeTransferFrom(from, to, 3, 10);
+```
+
+</Warning>
+
+### Token Metadata
+
+```compact
+export ledger _uris: Map<Uint<128>, Opaque<"string">>;
+
+export circuit uri(tokenId: Uint<128>): Opaque<"string"> {
+    if (!_uris.member(disclose(tokenId))) {
+        return ""; // Empty string
+    }
+    return _uris.lookup(disclose(tokenId));
+}
+
+export circuit _setURI(id: Uint<128>, newuri: Opaque<"string">): [] {
+    _uris.insert(disclose(id), disclose(newuri));
+}
+```
+
+Each token ID has its own metadata URI. Unlike ERC721 where each token is unique, ERC1155 URIs describe a **type** of token:
+
+```json
+{
+  "name": "Gold Coin",
+  "description": "Common currency in the game",
+  "image": "ipfs://QmX.../gold-coin.png",
+  "properties": {
+    "type": "Currency",
+    "rarity": "Common"
+  }
+}
+```
+
+## Try It Yourself
+
+<Accordion title="Build and Deploy">
+
+**1. Create project structure:**
+
+```bash
+mkdir my-game-items && cd my-game-items
+mkdir -p contracts
+```
+
+**2. Save the contract:**
+
+Create `contracts/game-items.compact` with the code above.
+
+**3. Define your token types:**
+
+```compact
+// Token IDs
+const GOLD_COINS = 1;
+const SILVER_COINS = 2;
+const HEALTH_POTION = 10;
+const MANA_POTION = 11;
+const LEGENDARY_SWORD = 1000;
+
+circuit constructor(): [] {
+    // Set up metadata
+    _setURI(GOLD_COINS, "ipfs://QmX.../gold.json");
+    _setURI(SILVER_COINS, "ipfs://QmX.../silver.json");
+    _setURI(HEALTH_POTION, "ipfs://QmX.../health-potion.json");
+    _setURI(LEGENDARY_SWORD, "ipfs://QmX.../legendary-sword.json");
+}
+```
+
+**4. Mint different token types:**
+
+```compact
+export circuit mintCurrency(to: Either<ZswapCoinPublicKey, ContractAddress>, amount: Uint<128>): [] {
+    _mint(to, GOLD_COINS, amount);
+}
+
+export circuit mintItem(to: Either<ZswapCoinPublicKey, ContractAddress>, itemId: Uint<128>, quantity: Uint<128>): [] {
+    _mint(to, itemId, quantity);
+}
+
+export circuit mintLegendary(to: Either<ZswapCoinPublicKey, ContractAddress>): [] {
+    // Only 1 legendary sword exists
+    assert(balanceOf(to, LEGENDARY_SWORD) == 0, "Already owns legendary");
+    _mint(to, LEGENDARY_SWORD, 1);
+}
+```
+
+**5. Compile:**
+
+```bash
+compact compile contracts/game-items.compact contracts/managed/game-items
+```
+
+</Accordion>
+
+### Challenge: Trading System
+
+<Accordion title="View Solution">
+
+Create a simple trading system where players can trade items:
+
+```compact
+export ledger _trades: Map<Uint<128>, Trade>;
+export ledger _nextTradeId: Uint<128>;
+
+struct Trade {
+    creator: Either<ZswapCoinPublicKey, ContractAddress>,
+    offeredTokenId: Uint<128>,
+    offeredAmount: Uint<128>,
+    requestedTokenId: Uint<128>,
+    requestedAmount: Uint<128>,
+    active: Boolean
+}
+
+circuit constructor(): [] {
+    _nextTradeId = disclose(1);
+    // ... other initialization
+}
+
+export circuit createTrade(
+    offeredTokenId: Uint<128>,
+    offeredAmount: Uint<128>,
+    requestedTokenId: Uint<128>,
+    requestedAmount: Uint<128>
+): Uint<128> {
+    const creator = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
+
+    // Verify creator has tokens to trade
+    assert(balanceOf(creator, offeredTokenId) >= offeredAmount, "Insufficient balance");
+
+    const tradeId = _nextTradeId;
+    _trades.insert(disclose(tradeId), disclose(Trade {
+        creator: creator,
+        offeredTokenId: offeredTokenId,
+        offeredAmount: offeredAmount,
+        requestedTokenId: requestedTokenId,
+        requestedAmount: requestedAmount,
+        active: true
+    }));
+
+    _nextTradeId = disclose(_nextTradeId + 1);
+    return tradeId;
+}
+
+export circuit acceptTrade(tradeId: Uint<128>): [] {
+    assert(_trades.member(disclose(tradeId)), "Trade does not exist");
+
+    const trade = _trades.lookup(disclose(tradeId));
+    assert(trade.active, "Trade not active");
+
+    const accepter = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
+    assert(balanceOf(accepter, trade.requestedTokenId) >= trade.requestedAmount, "Insufficient balance");
+
+    // Execute trade
+    safeTransferFrom(trade.creator, accepter, trade.offeredTokenId, trade.offeredAmount);
+    safeTransferFrom(accepter, trade.creator, trade.requestedTokenId, trade.requestedAmount);
+
+    // Mark trade as completed
+    _trades.lookup(tradeId).active = disclose(false);
+}
+```
+
+Now players can:
+
+1. Create trades: "I'll trade 100 gold coins for 5 health potions"
+2. Accept trades: Other players can fulfill the trade
+
+</Accordion>
+
+## What's Next
+
+<CardGroup cols={2}>
+  <Card title="ERC20 Token" icon="coins" href="/basics/erc20-token">
+    Create fungible tokens
+  </Card>
+  <Card title="ERC721 NFT" icon="image" href="/basics/erc721-nft">
+    Build non-fungible tokens
+  </Card>
+</CardGroup>
