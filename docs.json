@@ -22,14 +22,8 @@
     "name": "Get Started",
     "url": "https://midnight.network"
   },
-  "tabs": [
-    {
-      "name": "Documentation",
-      "url": "docs"
-    }
-  ],
   "navigation": {
-    "docs": [
+    "groups": [
       {
         "group": "Getting Started",
         "pages": ["index", "setup"]
