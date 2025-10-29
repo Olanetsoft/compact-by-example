@@ -68,6 +68,14 @@
           "basics/first-app",
           "basics/primitive-types"
         ]
+      },
+      {
+        "group": "Applications",
+        "pages": [
+          "applications/erc20-token",
+          "applications/erc721-nft",
+          "applications/erc1155-multitoken"
+        ]
       }
     ]
   },
