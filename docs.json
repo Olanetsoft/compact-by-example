@@ -44,8 +44,5 @@
     "suggestEdit": true,
     "raiseIssue": true,
     "thumbsRating": true
-  },
-  "contextual": {
-    "options": ["copy", "chatgpt", "claude"]
   }
 }
