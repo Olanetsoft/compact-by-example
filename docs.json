@@ -7,15 +7,27 @@
   },
   "favicon": "/favicon.svg",
   "colors": {
-    "primary": "#7C3AED",
-    "light": "#A78BFA",
-    "dark": "#5B21B6"
+    "primary": "#0066FF",
+    "light": "#3385FF",
+    "dark": "#0A0A0A"
   },
   "theme": "mint",
+  "font": {
+    "headings": {
+      "family": "Outfit"
+    },
+    "body": {
+      "family": "Outfit"
+    }
+  },
   "topbarLinks": [
     {
       "name": "GitHub",
       "url": "https://github.com/Olanetsoft/compact-by-example"
+    },
+    {
+      "name": "Midnight Network",
+      "url": "https://midnight.network"
     }
   ],
   "topbarCtaButton": {
@@ -40,11 +52,31 @@
   },
   "footerSocials": {
     "github": "https://github.com/Olanetsoft/compact-by-example",
-    "discord": "https://discord.com/invite/midnightnetwork"
+    "x": "https://x.com/MidnightNtwrk",
+    "discord": "https://discord.com/invite/midnightnetwork",
+    "linkedin": "https://www.linkedin.com/company/midnight-network",
+    "youtube": "https://www.youtube.com/@Midnight_Network_Official"
   },
   "feedback": {
     "suggestEdit": true,
     "raiseIssue": true,
     "thumbsRating": true
+  },
+  "seo": {
+    "indexing": "all",
+    "metatags": {
+      "description": "Learn Midnight's Compact language through practical examples. Master zero-knowledge smart contracts, privacy-preserving DApps, and blockchain development on Midnight Network.",
+      "keywords": "Compact language, Midnight Network, zero-knowledge proofs, privacy blockchain, smart contracts, ZK circuits, DApp development, Compact tutorial, blockchain programming",
+      "author": "Compact by Example",
+      "og:type": "website",
+      "og:site_name": "Compact by Example",
+      "og:title": "Compact by Example - Learn Midnight's Smart Contract Language",
+      "og:description": "Master Compact language with hands-on examples. Build privacy-preserving smart contracts on Midnight Network.",
+      "og:image": "https://raw.githubusercontent.com/Olanetsoft/compact-by-example/main/images/hero-dark.png",
+      "twitter:card": "summary_large_image",
+      "twitter:title": "Compact by Example - Learn Midnight's Smart Contract Language",
+      "twitter:description": "Master Compact language with hands-on examples for Midnight Network development",
+      "twitter:image": "https://raw.githubusercontent.com/Olanetsoft/compact-by-example/main/images/hero-dark.png"
+    }
   }
 }
