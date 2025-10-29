@@ -1,0 +1,456 @@
+---
+title: "Fungible Token (ERC20)"
+sidebarTitle: "ERC20 Token"
+description: "Create fungible tokens on Midnight Network using Compact. Learn to implement transfers, approvals, minting, and burning with OpenZeppelin-style patterns."
+"og:title": "ERC20 Fungible Token Tutorial - Compact by Example"
+"og:description": "Build ERC20-compatible tokens on Midnight with transfers, approvals, and allowances"
+---
+
+<Info>
+  **What You'll Learn**: Token initialization • Transfer mechanics • Approval
+  patterns • Balance tracking • Minting and burning
+</Info>
+
+## Introduction
+
+Fungible tokens are interchangeable digital assets where each unit is identical to another - like currency. This example implements an ERC20-style token in Compact, allowing you to create your own cryptocurrency on Midnight Network.
+
+<Tip>
+  **Real-world use**: Payment tokens, governance tokens, reward systems,
+  stablecoins, or any application requiring transferable digital currency.
+</Tip>
+
+## The Contract
+
+<Accordion title="View Contract Code">
+
+```compact
+pragma language_version >= 0.17.0;
+
+import CompactStandardLibrary;
+
+// Token metadata
+export sealed ledger _name: Opaque<"string">;
+export sealed ledger _symbol: Opaque<"string">;
+export sealed ledger _decimals: Uint<8>;
+
+// Token balances and allowances
+export ledger _balances: Map<Either<ZswapCoinPublicKey, ContractAddress>, Uint<128>>;
+export ledger _allowances: Map<Either<ZswapCoinPublicKey, ContractAddress>, Map<Either<ZswapCoinPublicKey, ContractAddress>, Uint<128>>>;
+export ledger _totalSupply: Uint<128>;
+
+// Initialize the token
+export circuit initialize(
+    name_: Opaque<"string">,
+    symbol_: Opaque<"string">,
+    decimals_: Uint<8>
+): [] {
+    _name = disclose(name_);
+    _symbol = disclose(symbol_);
+    _decimals = disclose(decimals_);
+}
+
+// Get token name
+export circuit name(): Opaque<"string"> {
+    return _name;
+}
+
+// Get token symbol
+export circuit symbol(): Opaque<"string"> {
+    return _symbol;
+}
+
+// Get decimals
+export circuit decimals(): Uint<8> {
+    return _decimals;
+}
+
+// Get total supply
+export circuit totalSupply(): Uint<128> {
+    return _totalSupply;
+}
+
+// Get balance of an account
+export circuit balanceOf(account: Either<ZswapCoinPublicKey, ContractAddress>): Uint<128> {
+    if (!_balances.member(disclose(account))) {
+        return 0;
+    }
+    return _balances.lookup(disclose(account));
+}
+
+// Transfer tokens
+export circuit transfer(to: Either<ZswapCoinPublicKey, ContractAddress>, value: Uint<128>): Boolean {
+    const owner = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
+    _transfer(owner, to, value);
+    return true;
+}
+
+// Approve spender
+export circuit approve(spender: Either<ZswapCoinPublicKey, ContractAddress>, value: Uint<128>): Boolean {
+    const owner = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
+    _approve(owner, spender, value);
+    return true;
+}
+
+// Get allowance
+export circuit allowance(
+    owner: Either<ZswapCoinPublicKey, ContractAddress>,
+    spender: Either<ZswapCoinPublicKey, ContractAddress>
+): Uint<128> {
+    if (!_allowances.member(disclose(owner)) || !_allowances.lookup(owner).member(disclose(spender))) {
+        return 0;
+    }
+    return _allowances.lookup(owner).lookup(disclose(spender));
+}
+
+// Transfer from approved account
+export circuit transferFrom(
+    from: Either<ZswapCoinPublicKey, ContractAddress>,
+    to: Either<ZswapCoinPublicKey, ContractAddress>,
+    value: Uint<128>
+): Boolean {
+    const spender = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
+    _spendAllowance(from, spender, value);
+    _transfer(from, to, value);
+    return true;
+}
+
+// Internal transfer function
+circuit _transfer(
+    from: Either<ZswapCoinPublicKey, ContractAddress>,
+    to: Either<ZswapCoinPublicKey, ContractAddress>,
+    value: Uint<128>
+): [] {
+    assert(!isKeyOrAddressZero(from), "Invalid sender");
+    assert(!isKeyOrAddressZero(to), "Invalid receiver");
+
+    const fromBal = balanceOf(from);
+    assert(fromBal >= value, "Insufficient balance");
+    _balances.insert(disclose(from), disclose(fromBal - value as Uint<128>));
+
+    const toBal = balanceOf(to);
+    _balances.insert(disclose(to), disclose(toBal + value as Uint<128>));
+}
+
+// Internal approve function
+circuit _approve(
+    owner: Either<ZswapCoinPublicKey, ContractAddress>,
+    spender: Either<ZswapCoinPublicKey, ContractAddress>,
+    value: Uint<128>
+): [] {
+    assert(!isKeyOrAddressZero(owner), "Invalid owner");
+    assert(!isKeyOrAddressZero(spender), "Invalid spender");
+
+    if (!_allowances.member(disclose(owner))) {
+        _allowances.insert(disclose(owner), default<Map<Either<ZswapCoinPublicKey, ContractAddress>, Uint<128>>>);
+    }
+    _allowances.lookup(owner).insert(disclose(spender), disclose(value));
+}
+
+// Spend allowance
+circuit _spendAllowance(
+    owner: Either<ZswapCoinPublicKey, ContractAddress>,
+    spender: Either<ZswapCoinPublicKey, ContractAddress>,
+    value: Uint<128>
+): [] {
+    const currentAllowance = allowance(owner, spender);
+    const MAX_UINT128 = 340282366920938463463374607431768211455;
+
+    if (currentAllowance < MAX_UINT128) {
+        assert(currentAllowance >= value, "Insufficient allowance");
+        _approve(owner, spender, currentAllowance - value as Uint<128>);
+    }
+}
+
+// Mint new tokens
+export circuit _mint(
+    account: Either<ZswapCoinPublicKey, ContractAddress>,
+    value: Uint<128>
+): [] {
+    assert(!isKeyOrAddressZero(account), "Invalid receiver");
+
+    const MAX_UINT128 = 340282366920938463463374607431768211455;
+    assert(MAX_UINT128 - _totalSupply >= value, "Mint overflow");
+
+    _totalSupply = disclose(_totalSupply + value as Uint<128>);
+
+    const balance = balanceOf(account);
+    _balances.insert(disclose(account), disclose(balance + value as Uint<128>));
+}
+
+// Burn tokens
+export circuit _burn(
+    account: Either<ZswapCoinPublicKey, ContractAddress>,
+    value: Uint<128>
+): [] {
+    assert(!isKeyOrAddressZero(account), "Invalid sender");
+
+    const balance = balanceOf(account);
+    assert(balance >= value, "Insufficient balance");
+    _balances.insert(disclose(account), disclose(balance - value as Uint<128>));
+
+    _totalSupply = disclose(_totalSupply - value as Uint<128>);
+}
+
+// Helper function
+circuit isKeyOrAddressZero(addr: Either<ZswapCoinPublicKey, ContractAddress>): Boolean {
+    // Implementation depends on your zero address check
+    return false; // Simplified
+}
+```
+
+</Accordion>
+
+## How It Works
+
+### Token Initialization
+
+```compact
+export circuit initialize(
+    name_: Opaque<"string">,
+    symbol_: Opaque<"string">,
+    decimals_: Uint<8>
+): [] {
+    _name = disclose(name_);
+    _symbol = disclose(symbol_);
+    _decimals = disclose(decimals_);
+}
+```
+
+Initialize your token with metadata. Call this once in your contract's constructor.
+
+- **name**: Human-readable name ("My Token")
+- **symbol**: Trading symbol ("MTK")
+- **decimals**: Number of decimal places (usually 18)
+
+<Note>
+  **Important**: Use `disclose()` when writing to ledger state. This makes the
+  value public on-chain.
+</Note>
+
+### Balance Tracking
+
+```compact
+export ledger _balances: Map<Either<ZswapCoinPublicKey, ContractAddress>, Uint<128>>;
+
+export circuit balanceOf(account: Either<ZswapCoinPublicKey, ContractAddress>): Uint<128> {
+    if (!_balances.member(disclose(account))) {
+        return 0;
+    }
+    return _balances.lookup(disclose(account));
+}
+```
+
+Balances are stored in a Map where keys are addresses (public keys or contracts) and values are token amounts.
+
+**Why Uint\<128\>?** Compact doesn't support Uint\<256\> due to circuit constraints. 128 bits is sufficient for most token applications (max: 340 trillion trillion tokens).
+
+### Transfers
+
+```compact
+export circuit transfer(to: Either<ZswapCoinPublicKey, ContractAddress>, value: Uint<128>): Boolean {
+    const owner = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
+    _transfer(owner, to, value);
+    return true;
+}
+
+circuit _transfer(
+    from: Either<ZswapCoinPublicKey, ContractAddress>,
+    to: Either<ZswapCoinPublicKey, ContractAddress>,
+    value: Uint<128>
+): [] {
+    assert(!isKeyOrAddressZero(from), "Invalid sender");
+    assert(!isKeyOrAddressZero(to), "Invalid receiver");
+
+    const fromBal = balanceOf(from);
+    assert(fromBal >= value, "Insufficient balance");
+    _balances.insert(disclose(from), disclose(fromBal - value as Uint<128>));
+
+    const toBal = balanceOf(to);
+    _balances.insert(disclose(to), disclose(toBal + value as Uint<128>));
+}
+```
+
+Transfers move tokens from one account to another. The public `transfer()` function uses `ownPublicKey()` to get the caller's address, while internal `_transfer()` does the actual balance updates.
+
+<Warning>
+  **Safety Checks**: Always validate that sender has sufficient balance and
+  neither address is zero (burn address).
+</Warning>
+
+### Approvals & Allowances
+
+```compact
+export circuit approve(spender: Either<ZswapCoinPublicKey, ContractAddress>, value: Uint<128>): Boolean {
+    const owner = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
+    _approve(owner, spender, value);
+    return true;
+}
+
+export circuit allowance(
+    owner: Either<ZswapCoinPublicKey, ContractAddress>,
+    spender: Either<ZswapCoinPublicKey, ContractAddress>
+): Uint<128> {
+    if (!_allowances.member(disclose(owner)) || !_allowances.lookup(owner).member(disclose(spender))) {
+        return 0;
+    }
+    return _allowances.lookup(owner).lookup(disclose(spender));
+}
+```
+
+Approvals allow a third party (spender) to transfer tokens on your behalf. This enables:
+
+- Decentralized exchanges to trade your tokens
+- Smart contracts to charge fees
+- Automated payment systems
+
+**Nested Map Structure**: `_allowances` is a Map of Maps - `owner → spender → amount`.
+
+### Transfer From
+
+```compact
+export circuit transferFrom(
+    from: Either<ZswapCoinPublicKey, ContractAddress>,
+    to: Either<ZswapCoinPublicKey, ContractAddress>,
+    value: Uint<128>
+): Boolean {
+    const spender = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
+    _spendAllowance(from, spender, value);
+    _transfer(from, to, value);
+    return true;
+}
+
+circuit _spendAllowance(
+    owner: Either<ZswapCoinPublicKey, ContractAddress>,
+    spender: Either<ZswapCoinPublicKey, ContractAddress>,
+    value: Uint<128>
+): [] {
+    const currentAllowance = allowance(owner, spender);
+    const MAX_UINT128 = 340282366920938463463374607431768211455;
+
+    if (currentAllowance < MAX_UINT128) {
+        assert(currentAllowance >= value, "Insufficient allowance");
+        _approve(owner, spender, currentAllowance - value as Uint<128>);
+    }
+}
+```
+
+`transferFrom` lets approved spenders move tokens. The allowance is decremented unless it's set to `MAX_UINT128` (infinite approval).
+
+<Tip>
+  **Infinite Approval**: Setting allowance to MAX_UINT128 creates a permanent
+  approval that never decreases. Useful for contracts you fully trust.
+</Tip>
+
+### Minting & Burning
+
+```compact
+export circuit _mint(
+    account: Either<ZswapCoinPublicKey, ContractAddress>,
+    value: Uint<128>
+): [] {
+    assert(!isKeyOrAddressZero(account), "Invalid receiver");
+
+    const MAX_UINT128 = 340282366920938463463374607431768211455;
+    assert(MAX_UINT128 - _totalSupply >= value, "Mint overflow");
+
+    _totalSupply = disclose(_totalSupply + value as Uint<128>);
+
+    const balance = balanceOf(account);
+    _balances.insert(disclose(account), disclose(balance + value as Uint<128>));
+}
+
+export circuit _burn(
+    account: Either<ZswapCoinPublicKey, ContractAddress>,
+    value: Uint<128>
+): [] {
+    assert(!isKeyOrAddressZero(account), "Invalid sender");
+
+    const balance = balanceOf(account);
+    assert(balance >= value, "Insufficient balance");
+    _balances.insert(disclose(account), disclose(balance - value as Uint<128>));
+
+    _totalSupply = disclose(_totalSupply - value as Uint<128>);
+}
+```
+
+- **Mint**: Creates new tokens, increasing total supply
+- **Burn**: Destroys tokens, decreasing total supply
+
+Both update the total supply and individual balances. Prefix with `_` to indicate these are internal functions that should be access-controlled in production.
+
+## Try It Yourself
+
+<Accordion title="Build and Deploy">
+
+**1. Create project structure:**
+
+```bash
+mkdir my-token && cd my-token
+mkdir -p contracts
+```
+
+**2. Save the contract:**
+
+Create `contracts/my-token.compact` with the code above.
+
+**3. Initialize your token:**
+
+In your contract constructor:
+
+```compact
+circuit constructor(): [] {
+    initialize("My Token", "MTK", 18);
+    // Mint initial supply to deployer
+    const deployer = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
+    _mint(deployer, 1000000 * (10 ** 18)); // 1 million tokens
+}
+```
+
+**4. Compile:**
+
+```bash
+compact compile contracts/my-token.compact contracts/managed/my-token
+```
+
+</Accordion>
+
+### Challenge: Add Access Control
+
+<Accordion title="View Solution">
+
+Add an owner-only mint function:
+
+```compact
+export ledger _owner: Either<ZswapCoinPublicKey, ContractAddress>;
+
+circuit constructor(): [] {
+    initialize("My Token", "MTK", 18);
+    _owner = disclose(left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey()));
+}
+
+export circuit mint(account: Either<ZswapCoinPublicKey, ContractAddress>, amount: Uint<128>): [] {
+    const caller = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
+    assert(caller == _owner, "Only owner can mint");
+    _mint(account, amount);
+}
+```
+
+Now only the contract owner can mint new tokens!
+
+</Accordion>
+
+## What's Next
+
+<CardGroup cols={2}>
+  <Card title="NFT (ERC721)" icon="image" href="/basics/erc721-nft">
+    Create unique, non-fungible tokens
+  </Card>
+  <Card
+    title="Multi-Token (ERC1155)"
+    icon="layer-group"
+    href="/basics/erc1155-multitoken"
+  >
+    Manage multiple token types in one contract
+  </Card>
+</CardGroup>

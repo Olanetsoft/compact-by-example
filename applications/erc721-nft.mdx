@@ -1,0 +1,559 @@
+---
+title: "Non-Fungible Token (ERC721)"
+sidebarTitle: "ERC721 NFT"
+description: "Create unique NFTs on Midnight Network using Compact. Learn ownership tracking, token URIs, approvals, and transfers for non-fungible tokens."
+"og:title": "ERC721 NFT Tutorial - Compact by Example"
+"og:description": "Build non-fungible tokens on Midnight with minting, transfers, and metadata"
+---
+
+<Info>
+  **What You'll Learn**: NFT ownership • Token metadata URIs • Approval
+  mechanisms • Transfer validation • Minting unique tokens
+</Info>
+
+## Introduction
+
+Non-Fungible Tokens (NFTs) are unique digital assets where each token has distinct properties. Unlike fungible tokens where every unit is identical, each NFT is one-of-a-kind - perfect for representing art, collectibles, game items, or proof of ownership.
+
+<Tip>
+  **Real-world use**: Digital art, collectibles, game assets, real estate
+  titles, event tickets, identity credentials, or any unique asset requiring
+  verifiable ownership.
+</Tip>
+
+## The Contract
+
+<Accordion title="View Contract Code">
+
+```compact
+pragma language_version >= 0.17.0;
+
+import CompactStandardLibrary;
+
+// Token metadata
+export sealed ledger _name: Opaque<"string">;
+export sealed ledger _symbol: Opaque<"string">;
+
+// NFT ownership and approvals
+export ledger _owners: Map<Uint<128>, Either<ZswapCoinPublicKey, ContractAddress>>;
+export ledger _balances: Map<Either<ZswapCoinPublicKey, ContractAddress>, Uint<128>>;
+export ledger _tokenApprovals: Map<Uint<128>, Either<ZswapCoinPublicKey, ContractAddress>>;
+export ledger _operatorApprovals: Map<Either<ZswapCoinPublicKey, ContractAddress>, Map<Either<ZswapCoinPublicKey, ContractAddress>, Boolean>>;
+
+// Token metadata URIs
+export ledger _tokenURIs: Map<Uint<128>, Opaque<"string">>;
+
+// Initialize the NFT collection
+export circuit initialize(name_: Opaque<"string">, symbol_: Opaque<"string">): [] {
+    _name = disclose(name_);
+    _symbol = disclose(symbol_);
+}
+
+// Get collection name
+export circuit name(): Opaque<"string"> {
+    return _name;
+}
+
+// Get collection symbol
+export circuit symbol(): Opaque<"string"> {
+    return _symbol;
+}
+
+// Get token owner
+export circuit ownerOf(tokenId: Uint<128>): Either<ZswapCoinPublicKey, ContractAddress> {
+    return _requireOwned(tokenId);
+}
+
+// Get owner's token count
+export circuit balanceOf(owner: Either<ZswapCoinPublicKey, ContractAddress>): Uint<128> {
+    if (!_balances.member(disclose(owner))) {
+        return 0;
+    }
+    return _balances.lookup(disclose(owner));
+}
+
+// Get token metadata URI
+export circuit tokenURI(tokenId: Uint<128>): Opaque<"string"> {
+    _requireOwned(tokenId);
+
+    if (!_tokenURIs.member(disclose(tokenId))) {
+        return ""; // Empty string
+    }
+    return _tokenURIs.lookup(disclose(tokenId));
+}
+
+// Approve address to transfer token
+export circuit approve(
+    to: Either<ZswapCoinPublicKey, ContractAddress>,
+    tokenId: Uint<128>
+): [] {
+    const auth = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
+    _approve(to, tokenId, auth);
+}
+
+// Get approved address for token
+export circuit getApproved(tokenId: Uint<128>): Either<ZswapCoinPublicKey, ContractAddress> {
+    _requireOwned(tokenId);
+    return _getApproved(tokenId);
+}
+
+// Set operator approval for all tokens
+export circuit setApprovalForAll(
+    operator: Either<ZswapCoinPublicKey, ContractAddress>,
+    approved: Boolean
+): [] {
+    const owner = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
+    _setApprovalForAll(owner, operator, approved);
+}
+
+// Check if operator is approved
+export circuit isApprovedForAll(
+    owner: Either<ZswapCoinPublicKey, ContractAddress>,
+    operator: Either<ZswapCoinPublicKey, ContractAddress>
+): Boolean {
+    if (_operatorApprovals.member(disclose(owner)) &&
+        _operatorApprovals.lookup(owner).member(disclose(operator))) {
+        return _operatorApprovals.lookup(owner).lookup(disclose(operator));
+    }
+    return false;
+}
+
+// Transfer token
+export circuit transferFrom(
+    from: Either<ZswapCoinPublicKey, ContractAddress>,
+    to: Either<ZswapCoinPublicKey, ContractAddress>,
+    tokenId: Uint<128>
+): [] {
+    assert(!isKeyOrAddressZero(to), "Invalid receiver");
+
+    const caller = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
+    const previousOwner = _update(to, tokenId, caller);
+
+    assert(previousOwner == from, "Incorrect owner");
+}
+
+// Mint new NFT
+export circuit _mint(
+    to: Either<ZswapCoinPublicKey, ContractAddress>,
+    tokenId: Uint<128>
+): [] {
+    assert(!isKeyOrAddressZero(to), "Invalid receiver");
+
+    const previousOwner = _update(to, tokenId, burnAddress());
+    assert(isKeyOrAddressZero(previousOwner), "Token already minted");
+}
+
+// Burn NFT
+export circuit _burn(tokenId: Uint<128>): [] {
+    const previousOwner = _update(burnAddress(), tokenId, burnAddress());
+    assert(!isKeyOrAddressZero(previousOwner), "Token does not exist");
+}
+
+// Set token URI
+export circuit _setTokenURI(tokenId: Uint<128>, uri: Opaque<"string">): [] {
+    _requireOwned(tokenId);
+    _tokenURIs.insert(disclose(tokenId), disclose(uri));
+}
+
+// Internal functions
+
+circuit _requireOwned(tokenId: Uint<128>): Either<ZswapCoinPublicKey, ContractAddress> {
+    const owner = _ownerOf(tokenId);
+    assert(!isKeyOrAddressZero(owner), "Token does not exist");
+    return owner;
+}
+
+circuit _ownerOf(tokenId: Uint<128>): Either<ZswapCoinPublicKey, ContractAddress> {
+    if (!_owners.member(disclose(tokenId))) {
+        return burnAddress();
+    }
+    return _owners.lookup(disclose(tokenId));
+}
+
+circuit _getApproved(tokenId: Uint<128>): Either<ZswapCoinPublicKey, ContractAddress> {
+    if (!_tokenApprovals.member(disclose(tokenId))) {
+        return burnAddress();
+    }
+    return _tokenApprovals.lookup(disclose(tokenId));
+}
+
+circuit _approve(
+    to: Either<ZswapCoinPublicKey, ContractAddress>,
+    tokenId: Uint<128>,
+    auth: Either<ZswapCoinPublicKey, ContractAddress>
+): [] {
+    if (!isKeyOrAddressZero(disclose(auth))) {
+        const owner = _requireOwned(tokenId);
+        assert((owner == disclose(auth) || isApprovedForAll(owner, auth)), "Not authorized");
+    }
+
+    _tokenApprovals.insert(disclose(tokenId), disclose(to));
+}
+
+circuit _setApprovalForAll(
+    owner: Either<ZswapCoinPublicKey, ContractAddress>,
+    operator: Either<ZswapCoinPublicKey, ContractAddress>,
+    approved: Boolean
+): [] {
+    assert(!isKeyOrAddressZero(operator), "Invalid operator");
+
+    if (!_operatorApprovals.member(disclose(owner))) {
+        _operatorApprovals.insert(disclose(owner), default<Map<Either<ZswapCoinPublicKey, ContractAddress>, Boolean>>);
+    }
+
+    _operatorApprovals.lookup(owner).insert(disclose(operator), disclose(approved));
+}
+
+circuit _update(
+    to: Either<ZswapCoinPublicKey, ContractAddress>,
+    tokenId: Uint<128>,
+    auth: Either<ZswapCoinPublicKey, ContractAddress>
+): Either<ZswapCoinPublicKey, ContractAddress> {
+    const from = _ownerOf(tokenId);
+
+    // Check authorization
+    if (!isKeyOrAddressZero(disclose(auth))) {
+        _checkAuthorized(from, auth, tokenId);
+    }
+
+    // Update balances and ownership
+    if (!isKeyOrAddressZero(disclose(from))) {
+        _approve(burnAddress(), tokenId, burnAddress());
+        const newBalance = _balances.lookup(disclose(from)) - 1 as Uint<128>;
+        _balances.insert(disclose(from), disclose(newBalance));
+    }
+
+    if (!isKeyOrAddressZero(disclose(to))) {
+        if (!_balances.member(disclose(to))) {
+            _balances.insert(disclose(to), 0);
+        }
+        const newBalance = _balances.lookup(disclose(to)) + 1 as Uint<128>;
+        _balances.insert(disclose(to), disclose(newBalance));
+    }
+
+    _owners.insert(disclose(tokenId), disclose(to));
+
+    return from;
+}
+
+circuit _checkAuthorized(
+    owner: Either<ZswapCoinPublicKey, ContractAddress>,
+    spender: Either<ZswapCoinPublicKey, ContractAddress>,
+    tokenId: Uint<128>
+): [] {
+    if (!_isAuthorized(owner, spender, tokenId)) {
+        assert(!isKeyOrAddressZero(owner), "Token does not exist");
+        assert(false, "Not authorized");
+    }
+}
+
+circuit _isAuthorized(
+    owner: Either<ZswapCoinPublicKey, ContractAddress>,
+    spender: Either<ZswapCoinPublicKey, ContractAddress>,
+    tokenId: Uint<128>
+): Boolean {
+    return (
+        !isKeyOrAddressZero(disclose(spender)) &&
+        (disclose(owner) == disclose(spender) ||
+         isApprovedForAll(owner, spender) ||
+         _getApproved(tokenId) == disclose(spender))
+    );
+}
+
+// Helper functions
+circuit isKeyOrAddressZero(addr: Either<ZswapCoinPublicKey, ContractAddress>): Boolean {
+    return false; // Simplified - implement your zero check
+}
+
+circuit burnAddress(): Either<ZswapCoinPublicKey, ContractAddress> {
+    // Return your burn address
+    return left<ZswapCoinPublicKey, ContractAddress>(/* zero key */);
+}
+```
+
+</Accordion>
+
+## How It Works
+
+### Collection Initialization
+
+```compact
+export circuit initialize(name_: Opaque<"string">, symbol_: Opaque<"string">): [] {
+    _name = disclose(name_);
+    _symbol = disclose(symbol_);
+}
+```
+
+Every NFT collection has a name and symbol:
+
+- **Name**: "Midnight Apes", "Cool Cats", "My Art Collection"
+- **Symbol**: "MAPE", "COOL", "ART"
+
+<Note>
+  **Best Practice**: Call `initialize()` once in your contract's constructor.
+  Unlike ERC20, NFTs don't have decimals.
+</Note>
+
+### Ownership Tracking
+
+```compact
+export ledger _owners: Map<Uint<128>, Either<ZswapCoinPublicKey, ContractAddress>>;
+export ledger _balances: Map<Either<ZswapCoinPublicKey, ContractAddress>, Uint<128>>;
+
+export circuit ownerOf(tokenId: Uint<128>): Either<ZswapCoinPublicKey, ContractAddress> {
+    return _requireOwned(tokenId);
+}
+
+export circuit balanceOf(owner: Either<ZswapCoinPublicKey, ContractAddress>): Uint<128> {
+    if (!_balances.member(disclose(owner))) {
+        return 0;
+    }
+    return _balances.lookup(disclose(owner));
+}
+```
+
+Two maps track ownership:
+
+- **\_owners**: Maps token ID → owner address (who owns which NFT)
+- **\_balances**: Maps owner → count (how many NFTs they own)
+
+Unlike fungible tokens where every unit is identical, each NFT has a unique ID (Uint\<128\>).
+
+### Token Metadata
+
+```compact
+export ledger _tokenURIs: Map<Uint<128>, Opaque<"string">>;
+
+export circuit tokenURI(tokenId: Uint<128>): Opaque<"string"> {
+    _requireOwned(tokenId);
+
+    if (!_tokenURIs.member(disclose(tokenId))) {
+        return ""; // Empty string
+    }
+    return _tokenURIs.lookup(disclose(tokenId));
+}
+
+export circuit _setTokenURI(tokenId: Uint<128>, uri: Opaque<"string">): [] {
+    _requireOwned(tokenId);
+    _tokenURIs.insert(disclose(tokenId), disclose(uri));
+}
+```
+
+Each NFT can have a URI pointing to its metadata (usually JSON):
+
+```json
+{
+  "name": "Cool Cat #42",
+  "description": "A very cool cat",
+  "image": "ipfs://QmX.../cat42.png",
+  "attributes": [
+    { "trait_type": "Color", "value": "Blue" },
+    { "trait_type": "Rarity", "value": "Legendary" }
+  ]
+}
+```
+
+Typically stored on IPFS or Arweave for decentralization.
+
+### Approvals
+
+```compact
+export circuit approve(
+    to: Either<ZswapCoinPublicKey, ContractAddress>,
+    tokenId: Uint<128>
+): [] {
+    const auth = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
+    _approve(to, tokenId, auth);
+}
+
+export circuit setApprovalForAll(
+    operator: Either<ZswapCoinPublicKey, ContractAddress>,
+    approved: Boolean
+): [] {
+    const owner = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
+    _setApprovalForAll(owner, operator, approved);
+}
+```
+
+NFTs support two approval types:
+
+1. **Single Token Approval** (`approve`): Allow someone to transfer one specific NFT
+2. **Operator Approval** (`setApprovalForAll`): Allow someone to transfer ALL your NFTs
+
+<Tip>
+  **Use Cases**: - Single approval: Selling one NFT on a marketplace - Operator
+  approval: Let a marketplace manage all your listings
+</Tip>
+
+### Transfers
+
+```compact
+export circuit transferFrom(
+    from: Either<ZswapCoinPublicKey, ContractAddress>,
+    to: Either<ZswapCoinPublicKey, ContractAddress>,
+    tokenId: Uint<128>
+): [] {
+    assert(!isKeyOrAddressZero(to), "Invalid receiver");
+
+    const caller = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
+    const previousOwner = _update(to, tokenId, caller);
+
+    assert(previousOwner == from, "Incorrect owner");
+}
+
+circuit _update(
+    to: Either<ZswapCoinPublicKey, ContractAddress>,
+    tokenId: Uint<128>,
+    auth: Either<ZswapCoinPublicKey, ContractAddress>
+): Either<ZswapCoinPublicKey, ContractAddress> {
+    const from = _ownerOf(tokenId);
+
+    // Check authorization
+    if (!isKeyOrAddressZero(disclose(auth))) {
+        _checkAuthorized(from, auth, tokenId);
+    }
+
+    // Clear approval
+    if (!isKeyOrAddressZero(disclose(from))) {
+        _approve(burnAddress(), tokenId, burnAddress());
+        const newBalance = _balances.lookup(disclose(from)) - 1 as Uint<128>;
+        _balances.insert(disclose(from), disclose(newBalance));
+    }
+
+    // Update new owner
+    if (!isKeyOrAddressZero(disclose(to))) {
+        if (!_balances.member(disclose(to))) {
+            _balances.insert(disclose(to), 0);
+        }
+        const newBalance = _balances.lookup(disclose(to)) + 1 as Uint<128>;
+        _balances.insert(disclose(to), disclose(newBalance));
+    }
+
+    _owners.insert(disclose(tokenId), disclose(to));
+
+    return from;
+}
+```
+
+Transfer process:
+
+1. Verify caller is authorized (owner, approved, or operator)
+2. Clear token approval
+3. Decrease sender's balance
+4. Increase receiver's balance
+5. Update token ownership
+
+<Warning>
+  **Important**: Approvals are automatically cleared on transfer. Operators
+  (setApprovalForAll) remain active.
+</Warning>
+
+### Minting & Burning
+
+```compact
+export circuit _mint(
+    to: Either<ZswapCoinPublicKey, ContractAddress>,
+    tokenId: Uint<128>
+): [] {
+    assert(!isKeyOrAddressZero(to), "Invalid receiver");
+
+    const previousOwner = _update(to, tokenId, burnAddress());
+    assert(isKeyOrAddressZero(previousOwner), "Token already minted");
+}
+
+export circuit _burn(tokenId: Uint<128>): [] {
+    const previousOwner = _update(burnAddress(), tokenId, burnAddress());
+    assert(!isKeyOrAddressZero(previousOwner), "Token does not exist");
+}
+```
+
+- **Mint**: Create a new NFT with a unique ID. Each tokenId can only be minted once.
+- **Burn**: Permanently destroy an NFT. Ownership transfers to burn address.
+
+Unlike fungible tokens, you can't mint multiple copies of the same NFT ID.
+
+## Try It Yourself
+
+<Accordion title="Build and Deploy">
+
+**1. Create project structure:**
+
+```bash
+mkdir my-nft-collection && cd my-nft-collection
+mkdir -p contracts
+```
+
+**2. Save the contract:**
+
+Create `contracts/my-nft.compact` with the code above.
+
+**3. Initialize your collection:**
+
+In your contract constructor:
+
+```compact
+circuit constructor(): [] {
+    initialize("My Cool NFTs", "COOL");
+}
+```
+
+**4. Mint your first NFT:**
+
+```compact
+export circuit mintNFT(to: Either<ZswapCoinPublicKey, ContractAddress>, tokenId: Uint<128>, uri: Opaque<"string">): [] {
+    _mint(to, tokenId);
+    _setTokenURI(tokenId, uri);
+}
+```
+
+**5. Compile:**
+
+```bash
+compact compile contracts/my-nft.compact contracts/managed/my-nft
+```
+
+</Accordion>
+
+### Challenge: Sequential Minting
+
+<Accordion title="View Solution">
+
+Add automatic token ID assignment:
+
+```compact
+export ledger _nextTokenId: Uint<128>;
+
+circuit constructor(): [] {
+    initialize("My Cool NFTs", "COOL");
+    _nextTokenId = disclose(1); // Start at token #1
+}
+
+export circuit mint(to: Either<ZswapCoinPublicKey, ContractAddress>, uri: Opaque<"string">): Uint<128> {
+    const tokenId = _nextTokenId;
+    _mint(to, tokenId);
+    _setTokenURI(tokenId, uri);
+
+    _nextTokenId = disclose(_nextTokenId + 1);
+
+    return tokenId;
+}
+```
+
+Now tokens are auto-numbered: #1, #2, #3, etc.
+
+</Accordion>
+
+## What's Next
+
+<CardGroup cols={2}>
+  <Card title="ERC20 Token" icon="coins" href="/basics/erc20-token">
+    Create fungible tokens
+  </Card>
+  <Card
+    title="Multi-Token (ERC1155)"
+    icon="layer-group"
+    href="/basics/erc1155-multitoken"
+  >
+    Manage multiple token types
+  </Card>
+</CardGroup>
