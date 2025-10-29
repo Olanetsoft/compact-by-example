@@ -274,19 +274,12 @@ Your PR description should include:
 
 ## Questions or Issues?
 
-- **Questions about Compact**: [Midnight Discord](https://discord.gg/midnight)
-- **Questions about this project**: Open a GitHub issue
-- **Bugs or typos**: Create an issue or submit a fix directly
+- Questions about Compact: [Midnight Discord](https://discord.gg/midnight)
+- Questions about this project: Open a GitHub issue
+- Bugs or typos: Create an issue or submit a fix directly
 
 ## Code of Conduct
 
-- Be respectful and welcoming to all contributors
-- Focus on constructive feedback
-- Help others learn and grow
-- Keep discussions focused on improving the documentation
+Please read our [Code of Conduct](./CODE_OF_CONDUCT.md) before contributing.
 
-Thank you for helping make Compact more accessible to developers! 🚀
-
----
-
-**Maintained by the Midnight community** | Learn more at [midnight.network](https://midnight.network)
+Thank you for helping make Compact more accessible to developers!
