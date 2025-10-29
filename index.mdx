@@ -1,0 +1,121 @@
+---
+title: "Compact by Example"
+description: "Learn Midnight's Compact language through hands-on, interactive examples"
+---
+
+## Welcome to Compact by Example
+
+Learn **[Midnight Network's](https://midnight.network)** Compact language through practical, runnable code examples. This guide provides a hands-on approach to mastering smart contract development for privacy-preserving applications on the Midnight blockchain.
+
+Inspired by the acclaimed "Solidity by Example," this resource is designed to help developers of all levels understand Compact's unique features and capabilities.
+
+## What is Compact?
+
+**Compact** is Midnight Network's smart contract programming language that enables you to write privacy-preserving decentralized applications. The Compact compiler outputs **zero-knowledge circuits** that prove the correctness of interactions with the blockchain ledger.
+
+### Key Concepts
+
+**Ledger State**: Smart contracts store data on-chain using `ledger` declarations. This state is publicly accessible but can contain commitments and hashes that preserve privacy.
+
+**Circuits**: The main functions of your contract. Exported circuits become entry points that users can call in transactions. All circuit computations are proven correct using zero-knowledge proofs.
+
+**Witnesses**: Functions that retrieve data from the user's local machine (like secret keys). Witness data is kept confidential and never revealed on-chain.
+
+**Privacy by Design**: Data not stored in ledger fields or returned from circuits remains confidential. Compact uses hashing and commitment schemes to enable proving correctness without revealing sensitive information.
+
+### What You Can Build
+
+- **Confidential Transactions**: Financial applications that hide transaction details while proving validity
+- **Private Voting Systems**: DAOs with confidential voting that prevents voter tracking
+- **Shielded Assets**: NFTs and tokens with private ownership and metadata
+- **Compliant Privacy**: Systems that prove regulatory compliance without exposing private data
+
+## Get Started
+
+<Columns cols={2}>
+<Card title="Installation Guide" icon="gear" href="/setup">
+  Set up your Compact development environment with compiler, wallet, and tools
+</Card>
+
+<Card title="Hello World" icon="hand-wave" href="/basics/hello-world">
+  Your first Compact contract with private state and zero-knowledge proofs
+</Card>
+
+<Card title="First App" icon="rocket" href="/basics/first-app">
+  Build a simple counter application with validation and state management
+</Card>
+
+<Card title="Primitive Types" icon="shapes" href="/basics/primitive-types">
+  Understand Compact's type system including Opaque types and privacy features
+</Card>
+</Columns>
+
+## Community & Support
+
+Join the Midnight community to get help, share your projects, and stay updated:
+
+<Columns cols={3}>
+<Card title="Official Docs" icon="book" href="https://docs.midnight.network">
+  Comprehensive Midnight Network documentation
+</Card>
+
+<Card
+  title="Discord Community"
+  icon="discord"
+  href="https://discord.com/invite/midnightnetwork"
+>
+  Get help, share ideas, and connect with developers
+</Card>
+
+<Card
+  title="Contributor Board"
+  icon="users"
+  href="https://github.com/orgs/midnightntwrk/projects/36"
+>
+  View and join community contributions
+</Card>
+
+<Card title="Midnight Network" icon="globe" href="https://midnight.network">
+  Learn about the Midnight ecosystem
+</Card>
+
+<Card title="Forum" icon="comments" href="https://forum.midnight.network">
+  Ask questions and discuss with the community
+</Card>
+
+<Card
+  title="Compact Compiler"
+  icon="github"
+  href="https://github.com/midnightntwrk/compact"
+>
+  Official Compact repository and releases
+</Card>
+
+<Card
+  title="YouTube Channel"
+  icon="youtube"
+  href="https://www.youtube.com/@midnight.network"
+>
+  Video tutorials and developer content
+</Card>
+
+<Card title="Hackathon" icon="trophy" href="https://midnight.network/hackathon">
+  Join Midnight Network hackathons and competitions
+</Card>
+
+<Card title="Whitepaper" icon="file-lines" href="https://midnight.network/whitepaper">
+  Technical deep dive into Midnight's architecture
+</Card>
+</Columns>
+
+<Tip>
+  **Pro Tip**: Use the search bar (⌘K or Ctrl+K) to quickly find specific
+  topics, functions, or concepts. All code examples and explanations are fully
+  searchable!
+</Tip>
+
+<Note>
+  **Disclaimer**: This is an educational resource maintained by the Midnight
+  community. For official documentation and production guidance, always refer to
+  [docs.midnight.network](https://docs.midnight.network).
+</Note>

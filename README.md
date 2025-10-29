@@ -1,43 +1,47 @@
-# Mintlify Starter Kit
+# Compact by Example
 
-Use the starter kit to get your docs deployed and ready to customize.
+Learn Midnight's Compact language through practical examples.
 
-Click the green **Use this template** button at the top of this repo to copy the Mintlify starter kit. The starter kit contains examples with
+Inspired by [Solidity by Example](https://solidity-by-example.org/).
 
-- Guide pages
-- Navigation
-- Customizations
-- API reference pages
-- Use of popular components
+## What's This?
 
-**[Follow the full quickstart guide](https://starter.mintlify.com/quickstart)**
+A collection of Compact smart contract examples for building privacy-preserving apps on Midnight Network. Each example is complete, tested, and ready to run.
 
-## Development
+## Quick Start
 
-Install the [Mintlify CLI](https://www.npmjs.com/package/mint) to preview your documentation changes locally. To install, use the following command:
+```bash
+# Install Mintlify
+npm i -g mintlify
 
-```
-npm i -g mint
+# Start the dev server
+mintlify dev
 ```
 
-Run the following command at the root of your documentation, where your `docs.json` is located:
+Visit `http://localhost:3000`
 
-```
-mint dev
-```
+## Structure
 
-View your local preview at `http://localhost:3000`.
+- `basics/` - Hello world, types, functions
+- `utxo/` - UTXO model examples
+- `privacy/` - ZK proofs and private state
+- `contracts/` - Tokens, NFTs, DAOs
+- `advanced/` - Complex patterns
+- `defi/` - DeFi protocols
+- `hacks/` - Common vulnerabilities
 
-## Publishing changes
+## Contributing
 
-Install our GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app) to propagate changes from your repo to your deployment. Changes are deployed to production automatically after pushing to the default branch.
+Found a bug? Want to add an example? PRs welcome!
 
-## Need help?
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
-### Troubleshooting
+## Resources
 
-- If your dev environment isn't running: Run `mint update` to ensure you have the most recent version of the CLI.
-- If a page loads as a 404: Make sure you are running in a folder with a valid `docs.json`.
+- [Midnight Docs](https://docs.midnight.network)
+- [Compact Compiler](https://github.com/midnightntwrk/compact)
+- [Discord](https://discord.gg/midnight)
 
-### Resources
-- [Mintlify documentation](https://mintlify.com/docs)
+## License
+
+MIT

@@ -1,0 +1,271 @@
+---
+title: Installation
+description: Get your Midnight development environment running to set up tools, configure wallets, and deploy your first zero-knowledge application.
+---
+
+## Overview
+
+Get started with Midnight development by setting up the Lace wallet, obtaining test tokens, and installing the Compact compiler. You'll also configure Docker for running the zero-knowledge proof server.
+
+**What You'll Install:**
+
+- **Lace Wallet**: Chrome extension for managing Midnight assets and signing transactions
+- **Compact Compiler**: Converts your `.compact` contracts into zero-knowledge circuits
+- **Docker Proof Server**: Generates cryptographic proofs for contract execution
+- **Development Tools**: VS Code extension and Node.js SDK for testing
+
+<Note>
+  **About Compact**: Compact is Midnight's smart contract language. It compiles
+  to zero-knowledge circuits that prove computation correctness without
+  revealing private data. All contract logic runs in circuits, and sensitive
+  data can be kept local using witness functions.
+</Note>
+
+## Prerequisites
+
+Before you begin, ensure you have:
+
+- Google Chrome browser installed
+- Basic familiarity with command-line operations
+- Administrative privileges on your computer (for installing Docker and Compact)
+
+## Install the Lace Midnight Preview wallet
+
+### 1. Download and install the Lace wallet extension
+
+Lace Midnight Preview wallet is a browser extension wallet for the Midnight network. It is currently only compatible with Google Chrome.
+
+1. **Open the Google Chrome browser** - Launch Chrome on your computer.
+
+2. **Install the Lace wallet extension** - Visit the Chrome Web Store: [Lace Beta Extension](https://chromewebstore.google.com/detail/lace-beta/hgeekaiplokcnmakghbdfbgnlfheichg)
+
+3. **Add to Chrome** - Click **Add to Chrome** and confirm by clicking **Add extension**.
+
+4. **Pin the extension** - Pin the extension to your toolbar for easy access (recommended).
+
+**Verification**: The Lace wallet icon appears in your Chrome toolbar.
+
+### 2. Create your wallet
+
+Your wallet is protected by a seed phrase, which acts as your master key. Keep it secret and safe.
+
+1. **Open Lace wallet** - Click the Lace wallet icon in your toolbar.
+
+2. **Create new wallet** - Select **Create a new wallet**.
+
+3. **Set password** - Choose a strong password.
+
+4. **Save seed phrase** - **Crucially**: Write down your seed phrase on paper and store it in a secure, offline location. Never store it digitally or share it.
+
+5. **Confirm seed phrase** - Confirm your seed phrase to complete the setup.
+
+**Verification**: Your wallet dashboard opens, showing a `0` tDUST balance.
+
+### 3. Get test tokens (tDUST)
+
+tDUST is the token used on the Midnight Testnet. It has no real-world value and is used for testing transactions and interacting with applications.
+
+1. **Copy wallet address** - In your Lace wallet, click **Receive** and copy your wallet address.
+
+2. **Visit the faucet** - Go to the Testnet Faucet: [https://midnight.network/test-faucet/](https://midnight.network/test-faucet/)
+
+3. **Request tokens** - Paste your address into the form and click **Request tDUST**.
+
+4. **Wait for confirmation** - Wait a few minutes for the tokens to arrive.
+
+**Verification**: Your Lace wallet shows a new balance of tDUST tokens.
+
+You are now ready to interact with DApps. To start building on Midnight, continue with these additional setup steps for the development environment.
+
+## Install Compact
+
+### 4. Install Compact using the installer script
+
+[Compact](https://github.com/midnightntwrk/compact) is Midnight's dedicated smart contract language for creating applications (DApps) that allow developers to express the amount of data protection that works for them.
+
+Use the following command to install the pre-built binaries:
+
+```bash
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/midnightntwrk/compact/releases/download/compact-v0.2.0/compact-installer.sh | sh
+```
+
+### 5. Update your shell PATH
+
+Make sure the Compact binary is in your shell's `PATH` to run it from any directory. Your shell needs to be updated after installation.
+
+<Tabs>
+  <Tab title="Bash">
+    ```bash
+    # Add to ~/.bashrc or ~/.bash_profile
+    export PATH="$HOME/.compact/bin:$PATH"
+    
+    # Reload shell configuration
+    source ~/.bashrc
+    ```
+  </Tab>
+
+{" "}
+<Tab title="Zsh">
+  ```bash # Add to ~/.zshrc export PATH="$HOME/.compact/bin:$PATH" # Reload
+  shell configuration source ~/.zshrc ```
+</Tab>
+
+  <Tab title="Fish">
+    ```bash
+    # Add to ~/.config/fish/config.fish
+    set -gx PATH $HOME/.compact/bin $PATH
+    
+    # Reload shell configuration
+    source ~/.config/fish/config.fish
+    ```
+  </Tab>
+</Tabs>
+
+### 6. Verify the Compact installation
+
+Run the following commands to verify your installation:
+
+```bash
+compact --version # print version of Compact
+which compact     # print installation path
+```
+
+**Verification**: These commands return the Compact version number and installation path.
+
+<Accordion title="Troubleshooting Compact Installation">
+  If you encounter issues: - **Command not found**: Ensure the PATH is correctly
+  set and the shell configuration is reloaded - **Permission denied**: Run the
+  installer with appropriate permissions or contact your system administrator -
+  **Network issues**: Check your internet connection and firewall settings Visit
+  the [Compact GitHub repository](https://github.com/midnightntwrk/compact) for
+  more help.
+</Accordion>
+
+## Set up the proof server
+
+### 7. Install Docker Desktop
+
+The proof server is required to generate zero-knowledge proofs for transactions locally. It runs as a background service using Docker.
+
+If you don't have Docker, download and install Docker for your operating system:
+
+<CardGroup cols={3}>
+  <Card
+    title="macOS"
+    icon="apple"
+    href="https://docs.docker.com/desktop/install/mac-install/"
+  >
+    Download Docker Desktop for Mac (Intel or Apple Silicon)
+  </Card>
+
+{" "}
+<Card
+  title="Windows"
+  icon="windows"
+  href="https://docs.docker.com/desktop/install/windows-install/"
+>
+  Download Docker Desktop for Windows (requires WSL2)
+</Card>
+
+  <Card
+    title="Linux"
+    icon="linux"
+    href="https://docs.docker.com/desktop/install/linux-install/"
+  >
+    Download Docker Desktop for Linux (Ubuntu, Debian, Fedora)
+  </Card>
+</CardGroup>
+
+After installation, verify Docker is running:
+
+```bash
+docker --version
+docker ps
+```
+
+### 8. Run the proof server
+
+Use the following command to start the proof-server in your terminal:
+
+```bash
+docker run -p 6300:6300 midnightnetwork/proof-server -- 'midnight-proof-server --network testnet'
+```
+
+<Warning>
+  This command occupies the terminal window while running. Keep this terminal
+  open when developing Compact applications.
+</Warning>
+
+**Verification**: The terminal displays logs indicating the server is running and listening at `http://localhost:6300`.
+
+<Note>
+  To use a local proof-server with Lace Midnight Preview wallet, go to
+  **Settings** > **Midnight** and select `Local (http://localhost:6300)`.
+</Note>
+
+## Install Compact VS Code extension
+
+### 9. Download the Compact VS Code extension
+
+The Compact VS Code extension provides helpful syntax highlighting, code snippets, and IntelliSense for Compact development.
+
+1. **Download the extension** - Get the latest VSIX package from the [official releases page](https://github.com/midnightntwrk/compact/releases).
+
+2. **Install in VS Code** - In VS Code, go to **Extensions** → Click the `...` menu → Select **Install from VSIX** → Choose the downloaded file.
+
+3. **Reload VS Code** - Reload the window when prompted to activate the extension.
+
+**Verification**: You now see **Compact Language Support** extension in your installed VS Code extensions.
+
+<Accordion title="Alternative: Manual Installation via Command Line">
+  You can also install the extension using the VS Code command line: ```bash
+  code --install-extension /path/to/compact-language-support.vsix ```
+</Accordion>
+
+## Verify your complete setup
+
+Run through this quick checklist to ensure everything is configured correctly:
+
+1. **Check Lace wallet** - ✅ Lace wallet installed and funded with tDUST tokens
+
+2. **Check Compact compiler** - Run the following command:
+
+   ```bash
+   compact --version
+   ```
+
+   ✅ Should display the installed Compact compiler version (e.g., 0.2.0 or higher)
+
+3. **Check Docker** - Verify Docker is running:
+
+   ```bash
+   docker ps
+   ```
+
+   ✅ Should show proof-server container running (if started)
+
+4. **Check VS Code extension** - ✅ Create a test `.compact` file and verify syntax highlighting works
+
+## Next steps
+
+Your development environment is now configured. You are ready to start building privacy-preserving applications on Midnight.
+
+<CardGroup cols={2}>
+  <Card title="Hello World" icon="hand-wave" href="/basics/hello-world">
+    Build your first Compact smart contract
+  </Card>
+
+{" "}
+<Card title="First App" icon="rocket" href="/basics/first-app">
+  Create a simple counter application with validation
+</Card>
+
+{" "}
+<Card title="Primitive Types" icon="shapes" href="/basics/primitive-types">
+  Learn about Compact's type system
+</Card>
+
+  <Card title="Midnight Docs" icon="book" href="https://docs.midnight.network">
+    Explore the official Midnight documentation
+  </Card>
+</CardGroup>

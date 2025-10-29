@@ -1,4 +1,5 @@
 {
+  "$schema": "https://mintlify.com/schema.json",
   "name": "Compact by Example",
   "logo": {
     "dark": "/logo/dark.svg",
@@ -8,71 +9,35 @@
   "colors": {
     "primary": "#7C3AED",
     "light": "#A78BFA",
-    "dark": "#5B21B6",
-    "anchors": {
-      "from": "#7C3AED",
-      "to": "#A78BFA"
-    }
+    "dark": "#5B21B6"
   },
   "theme": "mint",
   "topbarLinks": [
     {
       "name": "GitHub",
-      "url": "https://github.com/midnight-foundation/compact-by-example"
+      "url": "https://github.com/Olanetsoft/compact-by-example"
     }
   ],
   "topbarCtaButton": {
     "name": "Get Started",
     "url": "https://midnight.network"
   },
-  "tabs": [
-    {
-      "name": "Examples",
-      "url": "examples"
-    },
-    {
-      "name": "API Reference",
-      "url": "api-reference"
-    }
-  ],
   "navigation": [
     {
       "group": "Getting Started",
-      "pages": ["introduction", "setup", "first-contract"]
+      "pages": ["index", "setup"]
     },
     {
       "group": "Basics",
       "pages": [
         "basics/hello-world",
-        "basics/variables",
-        "basics/functions",
-        "basics/control-flow",
-        "basics/error-handling"
-      ]
-    },
-    {
-      "group": "UTXO Operations",
-      "pages": ["utxo/creating", "utxo/consuming", "utxo/validation"]
-    },
-    {
-      "group": "Private State",
-      "pages": [
-        "private-state/overview",
-        "private-state/variables",
-        "private-state/transitions"
+        "basics/first-app",
+        "basics/primitive-types"
       ]
     }
   ],
   "footerSocials": {
-    "github": "https://github.com/midnight-foundation",
-    "discord": "https://discord.gg/midnight",
-    "x": "https://x.com/midnight"
-  },
-  "feedback": {
-    "thumbsRating": true,
-    "suggestEdit": true
-  },
-  "search": {
-    "prompt": "Search Compact examples..."
+    "github": "https://github.com/Olanetsoft/compact-by-example",
+    "discord": "https://discord.com/invite/midnightnetwork"
   }
 }
