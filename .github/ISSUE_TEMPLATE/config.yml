@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 Community Discussion
+    url: https://discord.com/invite/midnightnetwork
+    about: Join our Discord for questions, discussions, and community support
+  - name: 📚 Midnight Documentation
+    url: https://docs.midnight.network
+    about: Official Midnight Network documentation
+  - name: 🔧 Compact Compiler
+    url: https://github.com/midnightntwrk/compact
+    about: Report compiler issues to the official Compact repository

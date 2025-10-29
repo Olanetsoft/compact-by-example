@@ -1,0 +1,37 @@
+{
+  "name": "compact-by-example",
+  "version": "1.0.0",
+  "description": "Learn Midnight's Compact language through practical, hands-on examples",
+  "scripts": {
+    "dev": "mintlify dev",
+    "install:mintlify": "npm install -g mintlify"
+  },
+  "keywords": [
+    "midnight",
+    "compact",
+    "blockchain",
+    "smart-contracts",
+    "privacy",
+    "zero-knowledge",
+    "zk-proofs",
+    "zkSNARK",
+    "web3",
+    "examples",
+    "tutorial",
+    "documentation"
+  ],
+  "author": "Midnight Community",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Olanetsoft/compact-by-example.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Olanetsoft/compact-by-example/issues"
+  },
+  "homepage": "https://compact-by-example.org",
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  }
+}
