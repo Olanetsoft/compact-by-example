@@ -1,0 +1,263 @@
+---
+title: "Primitive Types"
+description: "Master Compact's type system including Uint, Field, Bytes, and Opaque types"
+---
+
+<Info>
+  **What You'll Learn**: - Unsigned integers with bounded and sized types -
+  Field elements for zero-knowledge computations - Bytes for fixed-length byte
+  arrays - Opaque types for privacy-preserving data
+</Info>
+
+## Introduction
+
+Compact is statically and strongly typed - every expression has a compile-time type that the compiler verifies. Understanding Compact's primitive types is essential for building correct smart contracts, especially when working with privacy-preserving computations.
+
+**Real-world use**: Type safety prevents common vulnerabilities like integer overflow, type confusion, and accidental data exposure. Opaque types enable confidential transactions where amounts and identities remain private.
+
+## The Contract
+
+<Accordion title="View Contract Code">
+
+```compact
+pragma language_version 0.16;
+
+import CompactStandardLibrary;
+
+// Unsigned integers - bounded type
+export ledger counter: Uint<0..1000>;
+
+// Unsigned integers - sized type (32 bits)
+export ledger balance: Uint<32>;
+
+// Field element for ZK computations
+export ledger commitment: Field;
+
+// Fixed-length byte array
+export ledger hash: Bytes<32>;
+
+// Opaque type for private data
+export ledger secretValue: Opaque<"string">;
+
+export circuit updateCounter(newValue: Uint<0..1000>): [] {
+  disclose(counter = newValue);
+}
+
+export circuit updateBalance(amount: Uint<32>): [] {
+  disclose(balance = balance + amount);
+}
+
+export circuit storeCommitment(value: Field): [] {
+  disclose(commitment = value);
+}
+
+export circuit storeHash(data: Bytes<32>): [] {
+  disclose(hash = data);
+}
+
+export circuit updateSecret(secret: Opaque<"string">): [] {
+  disclose(secretValue = secret);
+}
+```
+
+</Accordion>
+
+## How It Works
+
+### Unsigned Integer Types - Bounded
+
+```compact
+export ledger counter: Uint<0..1000>;
+```
+
+**Bounded integer** `Uint<m..n>` represents values from `m` to `n` (inclusive). The lower bound `m` must be `0`, and `n` is a natural number.
+
+<Note>
+**Type Safety**: The compiler ensures you can't assign a value outside the bounds. For example, `Uint<0..255>` cannot hold the value 256.
+</Note>
+
+**Common bounds**:
+
+- `Uint<0..255>` - single byte values
+- `Uint<0..65535>` - two-byte values
+- `Uint<0..4294967295>` - four-byte values (32-bit max)
+
+### Unsigned Integer Types - Sized
+
+```compact
+export ledger balance: Uint<32>;
+```
+
+**Sized integer** `Uint<n>` uses up to `n` bits. This is equivalent to `Uint<0..m>` where `m = (2^n) - 1`.
+
+**Common sizes**:
+
+- `Uint<8>` = `Uint<0..255>` (1 byte)
+- `Uint<16>` = `Uint<0..65535>` (2 bytes)
+- `Uint<32>` = `Uint<0..4294967295>` (4 bytes)
+- `Uint<64>` = `Uint<0..18446744073709551615>` (8 bytes)
+- `Uint<256>` = very large numbers (32 bytes)
+
+<Warning>
+**Arithmetic Bounds**: When adding `Uint<0..m> + Uint<0..n>`, the result type is `Uint<0..m+n>`. Plan your bounds carefully to avoid exceeding the maximum unsigned integer value.
+</Warning>
+
+### Field Type
+
+```compact
+export ledger commitment: Field;
+```
+
+`Field` represents elements in the scalar prime field of the zero-knowledge proving system. Field arithmetic wraps around (modulo operation).
+
+**When to use**:
+
+- Hash function outputs
+- Cryptographic commitments
+- Zero-knowledge circuit computations
+- Values that need modular arithmetic
+
+**Key differences from Uint**:
+
+- `Field` arithmetic wraps around on overflow
+- `Uint` subtraction checks for underflow at runtime
+- `Uint<0..n>` is a subtype of `Field` for any `n`
+
+### Bytes Type
+
+```compact
+export ledger hash: Bytes<32>;
+```
+
+`Bytes<n>` represents fixed-length byte arrays of exactly `n` bytes. Used for hashes, signatures, and binary data.
+
+**Common lengths**:
+
+- `Bytes<20>` - Ethereum-style addresses
+- `Bytes<32>` - SHA-256 hashes, Ed25519 public keys
+- `Bytes<64>` - Ed25519 signatures
+
+String literals in Compact have type `Bytes<n>` where `n` is the UTF-8 byte length:
+
+```compact
+const message: Bytes<5> = "hello"; // UTF-8 encoding is 5 bytes
+```
+
+### Opaque Types
+
+```compact
+export ledger secretValue: Opaque<"string">;
+```
+
+`Opaque<tag>` types represent values that are **opaque to circuits** but can be manipulated by witnesses. In circuits, they're represented by their hash.
+
+**Allowed tags**:
+
+- `Opaque<"string">` - private strings
+- `Opaque<"Uint8Array">` - private byte arrays
+
+**Privacy model**: Opaque values enable witnesses to perform computations on private data without revealing it on-chain. The circuit only sees the hash.
+
+<Note>
+  **Use Case**: Store encrypted data or secret keys off-chain while proving you
+  know them on-chain through their hash commitments.
+</Note>
+
+### Boolean Type
+
+```compact
+const flag: Boolean = true;
+```
+
+`Boolean` has only two values: `true` and `false`. Used for conditions, flags, and logic.
+
+**Default value**: `false`
+
+## Try It Yourself
+
+<Accordion title="Build and Compile">
+
+**1. Create project structure:**
+
+```bash
+mkdir -p types-example/contracts
+cd types-example
+```
+
+**2. Save the contract:**
+
+Create `contracts/types.compact` with the code above.
+
+**3. Compile:**
+
+```bash
+compact compile contracts/types.compact contracts/managed/types
+```
+
+**4. Observe the generated TypeScript types:**
+
+Check `contracts/managed/types/contract/index.d.ts` to see how Compact types map to TypeScript:
+
+- `Uint<n>` → `bigint` with runtime bounds checks
+- `Field` → `bigint` with modular arithmetic
+- `Bytes<n>` → `Uint8Array` with length checks
+- `Opaque<"string">` → `string`
+- `Boolean` → `boolean`
+
+</Accordion>
+
+### Challenge: Type Conversions
+
+<Accordion title="View Solution">
+
+Compact supports type casts between compatible types using the `as` keyword:
+
+```compact
+pragma language_version 0.16;
+
+import CompactStandardLibrary;
+
+export circuit convertTypes(): [] {
+  // Upcasting (subtype to supertype) - always safe
+  const small: Uint<0..100> = 50;
+  const large: Uint<0..1000> = small as Uint<0..1000>; // Static cast
+
+  // Field conversion - always safe for Uint
+  const fieldValue: Field = small as Field;
+
+  // Downcasting - checked at runtime
+  const big: Uint<0..500> = 400;
+  const tiny: Uint<0..255> = big as Uint<0..255>; // Runtime check (passes)
+  // const invalid: Uint<0..255> = 300 as Uint<0..255>; // Runtime error!
+
+  // Boolean conversions
+  const zero: Field = 0;
+  const nonZero: Field = 42;
+  const isFalse: Boolean = zero as Boolean;     // false
+  const isTrue: Boolean = nonZero as Boolean;   // true
+
+  // Bytes to Field
+  const bytes: Bytes<8> = "12345678";
+  const fromBytes: Field = bytes as Field; // Interprets bytes as field element
+}
+```
+
+**Type cast rules**:
+
+- `Uint<0..m>` to `Uint<0..n>`: static if `m ≤ n`, checked if `m > n`
+- `Uint` to `Field`: always static (safe)
+- `Field` to `Boolean`: `0` → `false`, anything else → `true`
+- `Bytes<m>` to `Field`: interprets bytes as field element (checked for field overflow)
+
+</Accordion>
+
+## What's Next
+
+<CardGroup cols={2}>
+  <Card title="Hello World" icon="hand-wave" href="/basics/hello-world">
+    Apply types in your first contract
+  </Card>
+  <Card title="First App" icon="rocket" href="/basics/first-app">
+    Build a counter with type safety
+  </Card>
+</CardGroup>
