@@ -37,15 +37,7 @@
         "description": "Improve this page on GitHub",
         "icon": "github",
         "iconType": "brands",
-        "href": {
-          "base": "https://github.com/Olanetsoft/compact-by-example/edit/main",
-          "query": [
-            {
-              "key": "path",
-              "value": "$path"
-            }
-          ]
-        }
+        "href": "https://github.com/Olanetsoft/compact-by-example/edit/main/$path"
       }
     ]
   },
