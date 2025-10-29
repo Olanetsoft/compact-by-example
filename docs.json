@@ -11,7 +11,7 @@
     "light": "#A78BFA",
     "dark": "#5B21B6"
   },
-  "theme": "mint",
+  "theme": "quill",
   "topbarLinks": [
     {
       "name": "GitHub",
@@ -39,5 +39,13 @@
   "footerSocials": {
     "github": "https://github.com/Olanetsoft/compact-by-example",
     "discord": "https://discord.com/invite/midnightnetwork"
+  },
+  "feedback": {
+    "suggestEdit": true,
+    "raiseIssue": true,
+    "thumbsRating": true
+  },
+  "contextual": {
+    "options": ["copy", "chatgpt", "claude"]
   }
 }
