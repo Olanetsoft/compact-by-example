@@ -8,6 +8,10 @@ Inspired by [Solidity by Example](https://solidity-by-example.org/).
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
+[![Made for Midnight](https://img.shields.io/badge/Made%20for-Midnight%20Network-0066FF.svg)](https://midnight.network)
+[![Documentation](https://img.shields.io/badge/docs-compact--by--example.org-3385FF.svg)](https://compact-by-example.org)
+[![Community](https://img.shields.io/badge/Discord-Join%20Us-7289DA.svg?logo=discord&logoColor=white)](https://discord.com/invite/midnightnetwork)
+[![GitHub Stars](https://img.shields.io/github/stars/Olanetsoft/compact-by-example?style=social)](https://github.com/Olanetsoft/compact-by-example)
 
 ## What is This?
 
@@ -16,6 +20,7 @@ A community-driven collection of Compact smart contract examples for building pr
 ## Quick Start
 
 **Prerequisites:**
+
 - Node.js v18 or higher
 - npm or yarn
 
@@ -85,8 +90,6 @@ Read our [Contributing Guide](./CONTRIBUTING.md) for detailed instructions.
 ## Resources
 
 - [Midnight Documentation](https://docs.midnight.network) - Official docs
-- [Compact Compiler](https://github.com/midnightntwrk/compact) - Language tools
-- [Developer Portal](https://midnight.network/developers) - Guides and tutorials
 
 ## License
 
