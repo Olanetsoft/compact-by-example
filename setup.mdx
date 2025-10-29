@@ -1,18 +1,29 @@
 ---
-title: Installation
-description: Get your Midnight development environment running to set up tools, configure wallets, and deploy your first zero-knowledge application.
+title: "Installation & Setup"
+sidebarTitle: "Setup"
+description: "Complete setup guide for Midnight Compact development. Install Lace wallet, Compact compiler, Docker proof server, and VS Code extension for zero-knowledge smart contract development."
+"og:title": "Compact Installation Guide - Set Up Midnight Development Environment"
+"og:description": "Step-by-step guide to install Compact compiler, Lace wallet, and tools for Midnight Network development"
 ---
 
 ## Overview
 
 Get started with Midnight development by setting up the Lace wallet, obtaining test tokens, and installing the Compact compiler. You'll also configure Docker for running the zero-knowledge proof server.
 
-**What You'll Install:**
-
-- **Lace Wallet**: Chrome extension for managing Midnight assets and signing transactions
-- **Compact Compiler**: Converts your `.compact` contracts into zero-knowledge circuits
-- **Docker Proof Server**: Generates cryptographic proofs for contract execution
-- **Development Tools**: VS Code extension and Node.js SDK for testing
+<CardGroup cols={2}>
+  <Card title="Lace Wallet" icon="wallet">
+    Chrome extension for managing Midnight assets and signing transactions
+  </Card>
+  <Card title="Compact Compiler" icon="code">
+    Converts your `.compact` contracts into zero-knowledge circuits
+  </Card>
+  <Card title="Docker Proof Server" icon="docker">
+    Generates cryptographic proofs for contract execution
+  </Card>
+  <Card title="Development Tools" icon="wrench">
+    VS Code extension and Node.js SDK for testing
+  </Card>
+</CardGroup>
 
 <Note>
   **About Compact**: Compact is Midnight's smart contract language. It compiles
@@ -23,11 +34,11 @@ Get started with Midnight development by setting up the Lace wallet, obtaining t
 
 ## Prerequisites
 
-Before you begin, ensure you have:
-
-- Google Chrome browser installed
-- Basic familiarity with command-line operations
-- Administrative privileges on your computer (for installing Docker and Compact)
+<Warning>
+  Before you begin, ensure you have: - Google Chrome browser installed - Basic
+  familiarity with command-line operations - Administrative privileges on your
+  computer (for installing Docker and Compact)
+</Warning>
 
 ## Install the Lace Midnight Preview wallet
 
@@ -43,7 +54,9 @@ Lace Midnight Preview wallet is a browser extension wallet for the Midnight netw
 
 4. **Pin the extension** - Pin the extension to your toolbar for easy access (recommended).
 
-**Verification**: The Lace wallet icon appears in your Chrome toolbar.
+<Check>
+  **Verification**: The Lace wallet icon appears in your Chrome toolbar.
+</Check>
 
 ### 2. Create your wallet
 
@@ -59,7 +72,9 @@ Your wallet is protected by a seed phrase, which acts as your master key. Keep i
 
 5. **Confirm seed phrase** - Confirm your seed phrase to complete the setup.
 
-**Verification**: Your wallet dashboard opens, showing a `0` tDUST balance.
+<Check>
+  **Verification**: Your wallet dashboard opens, showing a `0` tDUST balance.
+</Check>
 
 ### 3. Get test tokens (tDUST)
 
@@ -73,9 +88,14 @@ tDUST is the token used on the Midnight Testnet. It has no real-world value and 
 
 4. **Wait for confirmation** - Wait a few minutes for the tokens to arrive.
 
-**Verification**: Your Lace wallet shows a new balance of tDUST tokens.
+<Check>
+  **Verification**: Your Lace wallet shows a new balance of tDUST tokens.
+</Check>
 
-You are now ready to interact with DApps. To start building on Midnight, continue with these additional setup steps for the development environment.
+<Success>
+  You are now ready to interact with DApps. To start building on Midnight,
+  continue with these additional setup steps for the development environment.
+</Success>
 
 ## Install Compact
 
@@ -105,6 +125,7 @@ Make sure the Compact binary is in your shell's `PATH` to run it from any direct
   </Tab>
 
 {" "}
+
 <Tab title="Zsh">
   ```bash # Add to ~/.zshrc export PATH="$HOME/.compact/bin:$PATH" # Reload
   shell configuration source ~/.zshrc ```
@@ -159,6 +180,7 @@ If you don't have Docker, download and install Docker for your operating system:
   </Card>
 
 {" "}
+
 <Card
   title="Windows"
   icon="windows"
@@ -256,11 +278,13 @@ Your development environment is now configured. You are ready to start building 
   </Card>
 
 {" "}
+
 <Card title="First App" icon="rocket" href="/basics/first-app">
   Create a simple counter application with validation
 </Card>
 
 {" "}
+
 <Card title="Primitive Types" icon="shapes" href="/basics/primitive-types">
   Learn about Compact's type system
 </Card>
