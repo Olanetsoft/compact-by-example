@@ -1,0 +1,162 @@
+---
+title: "Hello World"
+description: "Your first Compact smart contract - store and retrieve a message on-chain"
+---
+
+<Info>
+  **What You'll Learn**: Pragma directives • Ledger declarations • Circuits •
+  The `disclose()` function • Opaque types
+</Info>
+
+## Introduction
+
+Every developer's journey starts with "Hello World!" This contract stores a string message on the Midnight blockchain and allows anyone to update it. While simple, it demonstrates the fundamental structure of every Compact smart contract.
+
+**Real-world use**: Public announcements, bulletin boards, or any system where messages need to be stored on-chain.
+
+## The Contract
+
+<Accordion title="View Contract Code">
+
+```compact
+pragma language_version 0.16;
+
+import CompactStandardLibrary;
+
+// On-chain storage for the message
+export ledger message: Opaque<"string">;
+
+// Store a new message
+export circuit storeMessage(customMessage: Opaque<"string">): [] {
+    disclose(message = customMessage);
+}
+
+// Retrieve the current message
+export circuit getMessage(): Opaque<"string"> {
+    return message;
+}
+```
+
+</Accordion>
+
+## How It Works
+
+### Pragma Directive
+
+```compact
+pragma language_version 0.16;
+```
+
+Every Compact contract starts with a pragma directive specifying the compiler version. This ensures your contract behaves predictably and prevents issues with future compiler changes.
+
+<Note>
+**Best Practice**: Use exact versions (`0.16`) for production contracts, not ranges like `>= 0.16 && <= 0.17`.
+</Note>
+
+### Import Statement
+
+```compact
+import CompactStandardLibrary;
+```
+
+This import provides essential types (`Opaque<T>`, `Bytes<N>`, `Uint<N>`) and functions (`disclose()`, `persistentHash()`) needed for Compact contracts.
+
+### Ledger Declaration
+
+```compact
+export ledger message: Opaque<"string">;
+```
+
+The `ledger` keyword declares on-chain state variables. Think of it like a database schema - this reserves permanent storage on the blockchain. The `export` keyword makes this variable accessible from your DApp.
+
+**Opaque Types**: `Opaque<"string">` stores variable-length strings while maintaining Midnight's privacy guarantees. Other types include `Bytes<N>`, `Uint<N>`, and custom structs.
+
+### Circuits (Functions)
+
+```compact
+export circuit storeMessage(customMessage: Opaque<"string">): [] {
+    disclose(message = customMessage);
+}
+```
+
+Circuits are Compact's functions. They're compiled into zero-knowledge proofs that guarantee computational correctness. The `export` keyword makes this circuit callable from external applications.
+
+**Return type**: `[]` means this circuit returns nothing (like `void` in other languages).
+
+### The disclose() Function
+
+```compact
+disclose(message = customMessage);
+```
+
+<Warning>
+  **Privacy by Default**: Compact treats all data as private unless explicitly
+  disclosed. You must use `disclose()` when assigning user input to ledger
+  variables, signaling that this data is intentionally public.
+</Warning>
+
+Without `disclose()`, the compiler will reject the assignment - this prevents accidental data leaks.
+
+## Try It Yourself
+
+<Accordion title="Build and Compile">
+
+**1. Create the project structure:**
+
+```bash
+mkdir -p my-app/contracts
+cd my-app
+```
+
+**2. Save the contract:**
+
+Create `contracts/hello-world.compact` with the code shown above.
+
+**3. Compile the contract:**
+
+```bash
+compact compile contracts/hello-world.compact contracts/managed/hello-world
+```
+
+This generates zero-knowledge circuits, cryptographic keys, and TypeScript APIs in `contracts/managed/hello-world/`.
+
+**Generated file structure:**
+
+```
+my-app/
+├── contracts/
+│   ├── hello-world.compact
+│   └── managed/hello-world/
+│       ├── contract/       # TypeScript APIs
+│       ├── keys/           # ZK keys
+│       └── zkir/           # Circuits
+└── src/
+```
+
+</Accordion>
+
+### Challenge: Add a Clear Message Circuit
+
+<Accordion title="View Solution">
+
+Add a circuit that resets the message to an empty string:
+
+```compact
+export circuit clearMessage(): [] {
+    disclose(message = "");
+}
+```
+
+</Accordion>
+
+## What's Next
+
+<CardGroup cols={2}>
+<Card title="First App - Counter" icon="arrow-right" href="/basics/first-app">
+  Build an interactive counter with validation
+</Card>
+
+<Card title="Primitive Types" icon="shapes" href="/basics/primitive-types">
+  Learn about Compact's type system
+</Card>
+</CardGroup>

@@ -1,0 +1,201 @@
+---
+title: "First App"
+description: "Build your first interactive Compact DApp with public state management"
+---
+
+<Info>
+  **What You'll Learn**: - Working with public ledger state using `Counter` type
+  - Creating circuits that modify ledger state - Building and deploying your
+  first interactive DApp - Using the Midnight wallet and providers
+</Info>
+
+## Introduction
+
+A counter is one of the simplest smart contracts you can build - it maintains a number on the blockchain and allows anyone to increment it. This example demonstrates the fundamentals of public state management in Compact and serves as the foundation for understanding more complex DApps.
+
+**Real-world use**: While simple, counter logic appears in voting systems, auction bids, NFT minting limits, and any application that needs to track sequential operations on-chain.
+
+## The Contract
+
+<Accordion title="View Contract Code">
+
+```compact
+pragma language_version >= 0.16 && <= 0.18;
+
+import CompactStandardLibrary;
+
+// Public state visible on the blockchain
+export ledger round: Counter;
+
+// Circuit that increments the counter by 1
+export circuit increment(): [] {
+  round.increment(1);
+}
+```
+
+</Accordion>
+
+## How It Works
+
+### Public Ledger State
+
+```compact
+export ledger round: Counter;
+```
+
+The `Counter` type is a built-in ledger type specifically designed for counting operations. Unlike custom state variables, `Counter` is optimized for increment operations and ensures the value is always publicly visible on the blockchain.
+
+<Note>
+  **Public vs Private State**: The counter's value is stored on the public
+  ledger, meaning anyone can read it. Later examples will show how to use
+  `witness` for private state that stays off-chain.
+</Note>
+
+### The Increment Circuit
+
+```compact
+export circuit increment(): [] {
+  round.increment(1);
+}
+```
+
+Circuits are the functions that users call to interact with your contract. The `increment` circuit:
+
+- Takes no parameters: `()`
+- Returns no values: `[]`
+- Calls the built-in `increment` method on the `Counter` type with value `1`
+
+<Warning>
+  Counter values can only increase - there's no built-in decrement operation.
+  This ensures monotonic growth, which is useful for many applications like
+  round numbers or transaction IDs.
+</Warning>
+
+### Language Version Pragma
+
+```compact
+pragma language_version >= 0.16 && <= 0.18;
+```
+
+This example uses a **version range** (`>= 0.16 && <= 0.18`) instead of an exact version. This is acceptable for simple, stable contracts but exact versions (`0.16`) are recommended for production code to ensure consistent compilation results.
+
+## Try It Yourself
+
+<Accordion title="Full Project Setup">
+
+**1. Create project structure:**
+
+```bash
+mkdir -p counter-dapp/contract/src
+cd counter-dapp
+```
+
+**2. Save the contract:**
+
+Create `contract/src/counter.compact` with the contract code above.
+
+**3. Set up package.json:**
+
+```json
+{
+  "name": "counter-contract",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "compile": "compact compile --source src/counter.compact --output src/managed/counter --skip-zk",
+    "build": "tsc",
+    "test": "jest"
+  },
+  "devDependencies": {
+    "@midnight-ntwrk/compact-compiler": "latest",
+    "typescript": "^5.0.0"
+  }
+}
+```
+
+**4. Compile and run:**
+
+```bash
+npm install
+npm run compile
+```
+
+You should see output like:
+
+```
+Compact version: 0.25.0
+Compiling 1 circuits:
+  circuit "increment" (k=10, rows=29)
+Overall progress [====================] 1/1
+```
+
+The `--skip-zk` flag skips ZK key generation for faster development iterations.
+
+</Accordion>
+
+### Challenge: Add a Reset Circuit
+
+<Accordion title="View Solution">
+
+The `Counter` type only supports `increment()` operations - there's no built-in reset or decrement. Here are two approaches:
+
+**Option 1: Use a Cell with Uint type instead:**
+
+```compact
+pragma language_version 0.16;
+
+import CompactStandardLibrary;
+
+export ledger round: Uint<0..1000000>;
+
+export circuit increment(): [] {
+  disclose(round = round + 1);
+}
+
+export circuit reset(): [] {
+  disclose(round = 0);
+}
+```
+
+With `Uint<0..1000000>` (bounded integer), you can freely read and write values, including resetting to 0.
+
+**Option 2: Track resets separately with Counter:**
+
+```compact
+pragma language_version >= 0.16 && <= 0.18;
+
+import CompactStandardLibrary;
+
+export ledger round: Counter;
+export ledger resets: Counter;
+
+export circuit increment(): [] {
+  round.increment(1);
+}
+
+export circuit reset(): [] {
+  resets.increment(1);
+  // Client-side: effective_count = round.read() - resets.read()
+}
+```
+
+This approach keeps the `Counter` guarantees (monotonic increase) while logically supporting resets.
+
+<Note>
+  The `Counter` type's design decision to only allow increments is intentional -
+  it provides stronger guarantees for certain use cases like voting or auction
+  tracking where you never want the count to decrease.
+</Note>
+
+</Accordion>
+
+## What's Next
+
+<CardGroup cols={2}>
+  <Card title="Primitive Types" icon="cube" href="/basics/primitive-types">
+    Explore all Compact data types
+  </Card>
+  <Card title="Hello World" icon="hand-wave" href="/basics/hello-world">
+    Back to the basics
+  </Card>
+</CardGroup>
