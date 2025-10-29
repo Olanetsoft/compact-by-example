@@ -20,6 +20,37 @@
       "family": "Outfit"
     }
   },
+  "contextual": {
+    "options": [
+      "copy",
+      "view",
+      "chatgpt",
+      "claude",
+      "perplexity",
+      {
+        "title": "Midnight Discord",
+        "description": "Join our community and get help",
+        "icon": "discord",
+        "iconType": "brands",
+        "href": "https://discord.com/invite/midnightnetwork"
+      },
+      {
+        "title": "Suggest Edit",
+        "description": "Improve this page on GitHub",
+        "icon": "github",
+        "iconType": "brands",
+        "href": {
+          "base": "https://github.com/Olanetsoft/compact-by-example/edit/main",
+          "query": [
+            {
+              "key": "path",
+              "value": "$path"
+            }
+          ]
+        }
+      }
+    ]
+  },
   "topbarLinks": [
     {
       "name": "GitHub",
