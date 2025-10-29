@@ -22,20 +22,28 @@
     "name": "Get Started",
     "url": "https://midnight.network"
   },
-  "navigation": [
+  "tabs": [
     {
-      "group": "Getting Started",
-      "pages": ["index", "setup"]
-    },
-    {
-      "group": "Basics",
-      "pages": [
-        "basics/hello-world",
-        "basics/first-app",
-        "basics/primitive-types"
-      ]
+      "name": "Documentation",
+      "url": "docs"
     }
   ],
+  "navigation": {
+    "docs": [
+      {
+        "group": "Getting Started",
+        "pages": ["index", "setup"]
+      },
+      {
+        "group": "Basics",
+        "pages": [
+          "basics/hello-world",
+          "basics/first-app",
+          "basics/primitive-types"
+        ]
+      }
+    ]
+  },
   "footerSocials": {
     "github": "https://github.com/Olanetsoft/compact-by-example",
     "discord": "https://discord.com/invite/midnightnetwork"
