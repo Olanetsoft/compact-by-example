@@ -72,11 +72,11 @@
       "og:site_name": "Compact by Example",
       "og:title": "Compact by Example - Learn Midnight's Smart Contract Language",
       "og:description": "Master Compact language with hands-on examples. Build privacy-preserving smart contracts on Midnight Network.",
-      "og:image": "https://raw.githubusercontent.com/Olanetsoft/compact-by-example/main/images/hero-dark.png",
+      "og:image": "https://raw.githubusercontent.com/Olanetsoft/compact-by-example/main/images/og-image.png",
       "twitter:card": "summary_large_image",
       "twitter:title": "Compact by Example - Learn Midnight's Smart Contract Language",
       "twitter:description": "Master Compact language with hands-on examples for Midnight Network development",
-      "twitter:image": "https://raw.githubusercontent.com/Olanetsoft/compact-by-example/main/images/hero-dark.png"
+      "twitter:image": "https://raw.githubusercontent.com/Olanetsoft/compact-by-example/main/images/og-image.png"
     }
   }
 }
