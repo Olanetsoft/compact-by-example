@@ -1,0 +1,45 @@
+# Keep node_modules from being committed
+node_modules/
+
+# Keep build artifacts out
+dist/
+build/
+.mintlify/
+
+# Environment variables
+.env
+.env.local
+.env*.local
+
+# IDE specific files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Testing
+coverage/
+.nyc_output/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
