@@ -137,61 +137,6 @@ Update both balances in sequence:
 
 The transfer is atomic - either both accounts update or neither does.
 
-## Try It Yourself
-
-<Accordion title="Build and Test">
-
-**1. Create project:**
-
-```bash
-mkdir token-transfer && cd token-transfer
-mkdir -p contracts
-```
-
-**2. Save the contract as `contracts/transfer.compact`**
-
-**3. Add initialization:**
-
-```compact
-export ledger initialized: Boolean;
-
-circuit constructor(): [] {
-    // Give initial balances for testing
-    const alice = left<ZswapCoinPublicKey, ContractAddress>(/* alice's key */);
-    const bob = left<ZswapCoinPublicKey, ContractAddress>(/* bob's key */);
-
-    balances.insert(disclose(alice), 1000);
-    balances.insert(disclose(bob), 500);
-
-    initialized = disclose(true);
-}
-```
-
-**4. Add a balance query:**
-
-```compact
-export circuit myBalance(): Uint<128> {
-    const me = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
-    return getBalance(me);
-}
-```
-
-**5. Test transfers:**
-
-```compact
-// Alice transfers 100 tokens to Bob
-// Alice calls: transfer(bob_address, 100)
-// Result: Alice has 900, Bob has 600
-```
-
-**6. Compile:**
-
-```bash
-compact compile contracts/transfer.compact contracts/managed/transfer
-```
-
-</Accordion>
-
 ## What's Next
 
 <CardGroup cols={2}>

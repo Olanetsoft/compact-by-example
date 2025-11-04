@@ -60,60 +60,6 @@ export circuit increment(): [] {
 
 Increments the counter by 1. Counter values can only increase.
 
-## Try It Yourself
-
-<Accordion title="Full Project Setup">
-
-**1. Create project structure:**
-
-```bash
-mkdir -p counter-dapp/contract/src
-cd counter-dapp
-```
-
-**2. Save the contract:**
-
-Create `contract/src/counter.compact` with the contract code above.
-
-**3. Set up package.json:**
-
-```json
-{
-  "name": "counter-contract",
-  "version": "1.0.0",
-  "type": "module",
-  "scripts": {
-    "compile": "compact compile --source src/counter.compact --output src/managed/counter --skip-zk",
-    "build": "tsc",
-    "test": "jest"
-  },
-  "devDependencies": {
-    "@midnight-ntwrk/compact-compiler": "latest",
-    "typescript": "^5.0.0"
-  }
-}
-```
-
-**4. Compile and run:**
-
-```bash
-npm install
-npm run compile
-```
-
-You should see output like:
-
-```
-Compact version: 0.25.0
-Compiling 1 circuits:
-  circuit "increment" (k=10, rows=29)
-Overall progress [====================] 1/1
-```
-
-The `--skip-zk` flag skips ZK key generation for faster development iterations.
-
-</Accordion>
-
 ## What's Next
 
 <CardGroup cols={2}>
