@@ -415,31 +415,6 @@ compact compile contracts/my-token.compact contracts/managed/my-token
 
 </Accordion>
 
-### Challenge: Add Access Control
-
-<Accordion title="View Solution">
-
-Add an owner-only mint function:
-
-```compact
-export ledger _owner: Either<ZswapCoinPublicKey, ContractAddress>;
-
-circuit constructor(): [] {
-    initialize("My Token", "MTK", 18);
-    _owner = disclose(left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey()));
-}
-
-export circuit mint(account: Either<ZswapCoinPublicKey, ContractAddress>, amount: Uint<128>): [] {
-    const caller = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
-    assert(caller == _owner, "Only owner can mint");
-    _mint(account, amount);
-}
-```
-
-Now only the contract owner can mint new tokens!
-
-</Accordion>
-
 ## What's Next
 
 <CardGroup cols={2}>

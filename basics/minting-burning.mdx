@@ -255,7 +255,8 @@ circuit _mint(
 
 <Warning>
   **Security Risk**: The example `mint()` function has NO access control. Anyone
-  can mint tokens! See the challenge section for how to fix this.
+  can mint tokens! In production, add owner-only access control to the mint
+  function.
 </Warning>
 
 ### Burning Your Own Tokens
@@ -416,50 +417,6 @@ circuit testSupply(): [] {
 ```bash
 compact compile contracts/supply.compact contracts/managed/supply
 ```
-
-</Accordion>
-
-### Challenge: Add Owner-Only Minting
-
-<Accordion title="View Solution">
-
-Only allow specific addresses to mint tokens:
-
-```compact
-// Owner address
-export ledger owner: Either<ZswapCoinPublicKey, ContractAddress>;
-
-circuit constructor(initialOwner: Either<ZswapCoinPublicKey, ContractAddress>): [] {
-    owner = disclose(initialOwner);
-    totalSupply = disclose(0);
-}
-
-// Modifier: Only owner can call
-circuit onlyOwner(): [] {
-    const caller = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
-    assert(caller == owner, "Only owner can call this");
-}
-
-// Protected mint function
-export circuit mint(
-    account: Either<ZswapCoinPublicKey, ContractAddress>,
-    amount: Uint<128>
-): [] {
-    onlyOwner(); // Check authorization
-    _mint(account, amount);
-}
-
-// Transfer ownership
-export circuit transferOwnership(
-    newOwner: Either<ZswapCoinPublicKey, ContractAddress>
-): [] {
-    onlyOwner();
-    assert(!isZeroAddress(newOwner), "New owner is zero address");
-    owner = disclose(newOwner);
-}
-```
-
-Now only the owner can mint tokens, preventing unauthorized inflation.
 
 </Accordion>
 

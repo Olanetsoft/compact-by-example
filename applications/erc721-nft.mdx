@@ -514,35 +514,6 @@ compact compile contracts/my-nft.compact contracts/managed/my-nft
 
 </Accordion>
 
-### Challenge: Sequential Minting
-
-<Accordion title="View Solution">
-
-Add automatic token ID assignment:
-
-```compact
-export ledger _nextTokenId: Uint<128>;
-
-circuit constructor(): [] {
-    initialize("My Cool NFTs", "COOL");
-    _nextTokenId = disclose(1); // Start at token #1
-}
-
-export circuit mint(to: Either<ZswapCoinPublicKey, ContractAddress>, uri: Opaque<"string">): Uint<128> {
-    const tokenId = _nextTokenId;
-    _mint(to, tokenId);
-    _setTokenURI(tokenId, uri);
-
-    _nextTokenId = disclose(_nextTokenId + 1);
-
-    return tokenId;
-}
-```
-
-Now tokens are auto-numbered: #1, #2, #3, etc.
-
-</Accordion>
-
 ## What's Next
 
 <CardGroup cols={2}>
