@@ -1,0 +1,24 @@
+# robots.txt for Compact by Example
+# Custom configuration to allow AI crawlers for better discoverability
+
+User-agent: *
+Allow: /
+
+# Allow OpenAI GPTBot for ChatGPT
+User-agent: GPTBot
+Allow: /
+
+# Allow ChatGPT user agent
+User-agent: ChatGPT-User
+Allow: /
+
+# Allow Anthropic Claude web crawler
+User-agent: Claude-Web
+Allow: /
+
+# Allow Google Gemini
+User-agent: Google-Extended
+Allow: /
+
+# Sitemap location
+Sitemap: https://compact-by-example.org/sitemap.xml
