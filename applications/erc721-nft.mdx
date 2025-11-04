@@ -30,6 +30,9 @@ pragma language_version >= 0.17.0;
 
 import CompactStandardLibrary;
 
+// Initialization state
+export ledger _isInitialized: Boolean;
+
 // Token metadata
 export sealed ledger _name: Opaque<"string">;
 export sealed ledger _symbol: Opaque<"string">;
@@ -43,29 +46,36 @@ export ledger _operatorApprovals: Map<Either<ZswapCoinPublicKey, ContractAddress
 // Token metadata URIs
 export ledger _tokenURIs: Map<Uint<128>, Opaque<"string">>;
 
-// Initialize the NFT collection
+// Initialize the NFT collection (can only be called once)
 export circuit initialize(name_: Opaque<"string">, symbol_: Opaque<"string">): [] {
+    assert(!_isInitialized, "Already initialized");
+    _isInitialized = disclose(true);
+
     _name = disclose(name_);
     _symbol = disclose(symbol_);
 }
 
 // Get collection name
 export circuit name(): Opaque<"string"> {
+    assert(_isInitialized, "Not initialized");
     return _name;
 }
 
 // Get collection symbol
 export circuit symbol(): Opaque<"string"> {
+    assert(_isInitialized, "Not initialized");
     return _symbol;
 }
 
 // Get token owner
 export circuit ownerOf(tokenId: Uint<128>): Either<ZswapCoinPublicKey, ContractAddress> {
+    assert(_isInitialized, "Not initialized");
     return _requireOwned(tokenId);
 }
 
 // Get owner's token count
 export circuit balanceOf(owner: Either<ZswapCoinPublicKey, ContractAddress>): Uint<128> {
+    assert(_isInitialized, "Not initialized");
     if (!_balances.member(disclose(owner))) {
         return 0;
     }
@@ -74,6 +84,7 @@ export circuit balanceOf(owner: Either<ZswapCoinPublicKey, ContractAddress>): Ui
 
 // Get token metadata URI
 export circuit tokenURI(tokenId: Uint<128>): Opaque<"string"> {
+    assert(_isInitialized, "Not initialized");
     _requireOwned(tokenId);
 
     if (!_tokenURIs.member(disclose(tokenId))) {
@@ -87,12 +98,14 @@ export circuit approve(
     to: Either<ZswapCoinPublicKey, ContractAddress>,
     tokenId: Uint<128>
 ): [] {
+    assert(_isInitialized, "Not initialized");
     const auth = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
     _approve(to, tokenId, auth);
 }
 
 // Get approved address for token
 export circuit getApproved(tokenId: Uint<128>): Either<ZswapCoinPublicKey, ContractAddress> {
+    assert(_isInitialized, "Not initialized");
     _requireOwned(tokenId);
     return _getApproved(tokenId);
 }
@@ -102,6 +115,7 @@ export circuit setApprovalForAll(
     operator: Either<ZswapCoinPublicKey, ContractAddress>,
     approved: Boolean
 ): [] {
+    assert(_isInitialized, "Not initialized");
     const owner = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
     _setApprovalForAll(owner, operator, approved);
 }
@@ -111,6 +125,7 @@ export circuit isApprovedForAll(
     owner: Either<ZswapCoinPublicKey, ContractAddress>,
     operator: Either<ZswapCoinPublicKey, ContractAddress>
 ): Boolean {
+    assert(_isInitialized, "Not initialized");
     if (_operatorApprovals.member(disclose(owner)) &&
         _operatorApprovals.lookup(owner).member(disclose(operator))) {
         return _operatorApprovals.lookup(owner).lookup(disclose(operator));
@@ -124,6 +139,7 @@ export circuit transferFrom(
     to: Either<ZswapCoinPublicKey, ContractAddress>,
     tokenId: Uint<128>
 ): [] {
+    assert(_isInitialized, "Not initialized");
     assert(!isKeyOrAddressZero(to), "Invalid receiver");
 
     const caller = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
@@ -137,6 +153,7 @@ export circuit _mint(
     to: Either<ZswapCoinPublicKey, ContractAddress>,
     tokenId: Uint<128>
 ): [] {
+    assert(_isInitialized, "Not initialized");
     assert(!isKeyOrAddressZero(to), "Invalid receiver");
 
     const previousOwner = _update(to, tokenId, burnAddress());
@@ -145,12 +162,14 @@ export circuit _mint(
 
 // Burn NFT
 export circuit _burn(tokenId: Uint<128>): [] {
+    assert(_isInitialized, "Not initialized");
     const previousOwner = _update(burnAddress(), tokenId, burnAddress());
     assert(!isKeyOrAddressZero(previousOwner), "Token does not exist");
 }
 
 // Set token URI
 export circuit _setTokenURI(tokenId: Uint<128>, uri: Opaque<"string">): [] {
+    assert(_isInitialized, "Not initialized");
     _requireOwned(tokenId);
     _tokenURIs.insert(disclose(tokenId), disclose(uri));
 }
@@ -260,14 +279,20 @@ circuit _isAuthorized(
     );
 }
 
-// Helper functions
-circuit isKeyOrAddressZero(addr: Either<ZswapCoinPublicKey, ContractAddress>): Boolean {
-    return false; // Simplified - implement your zero check
+// Helper Functions
+// These would typically be imported from OpenZeppelin's Utils module
+circuit isKeyOrAddressZero(keyOrAddress: Either<ZswapCoinPublicKey, ContractAddress>): Boolean {
+    return isContractAddress(keyOrAddress)
+        ? default<ContractAddress> == keyOrAddress.right
+        : default<ZswapCoinPublicKey> == keyOrAddress.left;
+}
+
+circuit isContractAddress(keyOrAddress: Either<ZswapCoinPublicKey, ContractAddress>): Boolean {
+    return !keyOrAddress.is_left;
 }
 
 circuit burnAddress(): Either<ZswapCoinPublicKey, ContractAddress> {
-    // Return your burn address
-    return left<ZswapCoinPublicKey, ContractAddress>(/* zero key */);
+    return left<ZswapCoinPublicKey, ContractAddress>(default<ZswapCoinPublicKey>);
 }
 ```
 
@@ -275,202 +300,84 @@ circuit burnAddress(): Either<ZswapCoinPublicKey, ContractAddress> {
 
 ## How It Works
 
-### Collection Initialization
+This ERC721 NFT implementation provides standard non-fungible token functionality. For detailed explanations of core concepts, see the linked basics tutorials.
 
-```compact
-export circuit initialize(name_: Opaque<"string">, symbol_: Opaque<"string">): [] {
-    _name = disclose(name_);
-    _symbol = disclose(symbol_);
-}
-```
+### Initialization Protection
 
-Every NFT collection has a name and symbol:
+Uses an initialization guard (same pattern as ERC20) to ensure `initialize()` can only be called once with the collection name and symbol.
 
-- **Name**: "Midnight Apes", "Cool Cats", "My Art Collection"
-- **Symbol**: "MAPE", "COOL", "ART"
+### Ownership Structure
 
-<Note>
-  **Best Practice**: Call `initialize()` once in your contract's constructor.
-  Unlike ERC20, NFTs don't have decimals.
-</Note>
+**Dual Map System**:
 
-### Ownership Tracking
+- `_owners`: Maps tokenId → owner address (who owns which specific NFT)
+- `_balances`: Maps owner → count (how many NFTs they own total)
 
-```compact
-export ledger _owners: Map<Uint<128>, Either<ZswapCoinPublicKey, ContractAddress>>;
-export ledger _balances: Map<Either<ZswapCoinPublicKey, ContractAddress>, Uint<128>>;
-
-export circuit ownerOf(tokenId: Uint<128>): Either<ZswapCoinPublicKey, ContractAddress> {
-    return _requireOwned(tokenId);
-}
-
-export circuit balanceOf(owner: Either<ZswapCoinPublicKey, ContractAddress>): Uint<128> {
-    if (!_balances.member(disclose(owner))) {
-        return 0;
-    }
-    return _balances.lookup(disclose(owner));
-}
-```
-
-Two maps track ownership:
-
-- **\_owners**: Maps token ID → owner address (who owns which NFT)
-- **\_balances**: Maps owner → count (how many NFTs they own)
-
-Unlike fungible tokens where every unit is identical, each NFT has a unique ID (Uint\<128\>).
+Each token has a unique ID (Uint\<128\>). Unlike fungible tokens where all units are identical, each NFT is distinct. See [Mappings tutorial](/basics/mappings) for Map storage basics.
 
 ### Token Metadata
 
-```compact
-export ledger _tokenURIs: Map<Uint<128>, Opaque<"string">>;
-
-export circuit tokenURI(tokenId: Uint<128>): Opaque<"string"> {
-    _requireOwned(tokenId);
-
-    if (!_tokenURIs.member(disclose(tokenId))) {
-        return ""; // Empty string
-    }
-    return _tokenURIs.lookup(disclose(tokenId));
-}
-
-export circuit _setTokenURI(tokenId: Uint<128>, uri: Opaque<"string">): [] {
-    _requireOwned(tokenId);
-    _tokenURIs.insert(disclose(tokenId), disclose(uri));
-}
-```
-
-Each NFT can have a URI pointing to its metadata (usually JSON):
+Each NFT has a URI pointing to off-chain metadata (name, description, image, attributes). Typically stored on IPFS/Arweave:
 
 ```json
 {
   "name": "Cool Cat #42",
-  "description": "A very cool cat",
   "image": "ipfs://QmX.../cat42.png",
-  "attributes": [
-    { "trait_type": "Color", "value": "Blue" },
-    { "trait_type": "Rarity", "value": "Legendary" }
-  ]
+  "attributes": [{ "trait_type": "Color", "value": "Blue" }]
 }
 ```
 
-Typically stored on IPFS or Arweave for decentralization.
+### ERC721-Specific Features
 
-### Approvals
+**Dual Approval System**:
+
+- `approve(address, tokenId)` - Approve transfer of one specific token
+- `setApprovalForAll(operator, bool)` - Approve operator for ALL tokens
+
+**Transfer Mechanics**:
+
+- Authorization check (owner/approved/operator)
+- Clear single-token approval (operator approvals persist)
+- Update ownership maps (decrease sender balance, increase receiver balance)
+- Atomic updates (all-or-nothing)
+
+**Minting/Burning**:
+
+- Each tokenId can only be minted once (no duplicates)
+- Minting "from" burn address, burning "to" burn address
+- Uses internal `_update()` function for all ownership changes
+
+For transfer authorization patterns, see the [Transfer tutorial](/basics/transfer)
+
+### Helper Functions
+
+The contract uses utility functions for address validation and operations:
 
 ```compact
-export circuit approve(
-    to: Either<ZswapCoinPublicKey, ContractAddress>,
-    tokenId: Uint<128>
-): [] {
-    const auth = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
-    _approve(to, tokenId, auth);
+circuit isKeyOrAddressZero(keyOrAddress: Either<ZswapCoinPublicKey, ContractAddress>): Boolean {
+    return isContractAddress(keyOrAddress)
+        ? default<ContractAddress> == keyOrAddress.right
+        : default<ZswapCoinPublicKey> == keyOrAddress.left;
 }
 
-export circuit setApprovalForAll(
-    operator: Either<ZswapCoinPublicKey, ContractAddress>,
-    approved: Boolean
-): [] {
-    const owner = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
-    _setApprovalForAll(owner, operator, approved);
+circuit isContractAddress(keyOrAddress: Either<ZswapCoinPublicKey, ContractAddress>): Boolean {
+    return !keyOrAddress.is_left;
+}
+
+circuit burnAddress(): Either<ZswapCoinPublicKey, ContractAddress> {
+    return left<ZswapCoinPublicKey, ContractAddress>(default<ZswapCoinPublicKey>);
 }
 ```
 
-NFTs support two approval types:
+- **isKeyOrAddressZero**: Validates addresses by checking if they match the zero/default value. Used to prevent minting/transferring to invalid addresses.
+- **isContractAddress**: Checks if an address is a ContractAddress type (not a ZswapCoinPublicKey). Used to prevent unsafe transfers to contracts until contract-to-contract calls are supported.
+- **burnAddress**: Returns the burn address for minting (from burn address) and burning (to burn address) operations.
 
-1. **Single Token Approval** (`approve`): Allow someone to transfer one specific NFT
-2. **Operator Approval** (`setApprovalForAll`): Allow someone to transfer ALL your NFTs
-
-<Tip>
-  **Use Cases**: - Single approval: Selling one NFT on a marketplace - Operator
-  approval: Let a marketplace manage all your listings
-</Tip>
-
-### Transfers
-
-```compact
-export circuit transferFrom(
-    from: Either<ZswapCoinPublicKey, ContractAddress>,
-    to: Either<ZswapCoinPublicKey, ContractAddress>,
-    tokenId: Uint<128>
-): [] {
-    assert(!isKeyOrAddressZero(to), "Invalid receiver");
-
-    const caller = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
-    const previousOwner = _update(to, tokenId, caller);
-
-    assert(previousOwner == from, "Incorrect owner");
-}
-
-circuit _update(
-    to: Either<ZswapCoinPublicKey, ContractAddress>,
-    tokenId: Uint<128>,
-    auth: Either<ZswapCoinPublicKey, ContractAddress>
-): Either<ZswapCoinPublicKey, ContractAddress> {
-    const from = _ownerOf(tokenId);
-
-    // Check authorization
-    if (!isKeyOrAddressZero(disclose(auth))) {
-        _checkAuthorized(from, auth, tokenId);
-    }
-
-    // Clear approval
-    if (!isKeyOrAddressZero(disclose(from))) {
-        _approve(burnAddress(), tokenId, burnAddress());
-        const newBalance = _balances.lookup(disclose(from)) - 1 as Uint<128>;
-        _balances.insert(disclose(from), disclose(newBalance));
-    }
-
-    // Update new owner
-    if (!isKeyOrAddressZero(disclose(to))) {
-        if (!_balances.member(disclose(to))) {
-            _balances.insert(disclose(to), 0);
-        }
-        const newBalance = _balances.lookup(disclose(to)) + 1 as Uint<128>;
-        _balances.insert(disclose(to), disclose(newBalance));
-    }
-
-    _owners.insert(disclose(tokenId), disclose(to));
-
-    return from;
-}
-```
-
-Transfer process:
-
-1. Verify caller is authorized (owner, approved, or operator)
-2. Clear token approval
-3. Decrease sender's balance
-4. Increase receiver's balance
-5. Update token ownership
-
-<Warning>
-  **Important**: Approvals are automatically cleared on transfer. Operators
-  (setApprovalForAll) remain active.
-</Warning>
-
-### Minting & Burning
-
-```compact
-export circuit _mint(
-    to: Either<ZswapCoinPublicKey, ContractAddress>,
-    tokenId: Uint<128>
-): [] {
-    assert(!isKeyOrAddressZero(to), "Invalid receiver");
-
-    const previousOwner = _update(to, tokenId, burnAddress());
-    assert(isKeyOrAddressZero(previousOwner), "Token already minted");
-}
-
-export circuit _burn(tokenId: Uint<128>): [] {
-    const previousOwner = _update(burnAddress(), tokenId, burnAddress());
-    assert(!isKeyOrAddressZero(previousOwner), "Token does not exist");
-}
-```
-
-- **Mint**: Create a new NFT with a unique ID. Each tokenId can only be minted once.
-- **Burn**: Permanently destroy an NFT. Ownership transfers to burn address.
-
-Unlike fungible tokens, you can't mint multiple copies of the same NFT ID.
+<Note>
+  In production OpenZeppelin contracts, these utilities are imported from the
+  `Utils` module. The implementations shown here match the OpenZeppelin Compact
+  Contracts v0.0.1-alpha.0 specification.
+</Note>
 
 ## Try It Yourself
 
