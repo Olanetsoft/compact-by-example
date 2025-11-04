@@ -1,0 +1,364 @@
+---
+title: "Transfer Function"
+sidebarTitle: "Transfer"
+description: "Build a secure transfer function in Compact. Learn authorization checks, balance validation, and safe state updates for moving tokens between accounts."
+"og:title": "Transfer Function Tutorial - Compact by Example"
+"og:description": "Master transfer logic with authorization, validation, and safe balance updates"
+---
+
+<Info>
+  **What You'll Learn**: Authorization with ownPublicKey() • Balance validation
+  • Overflow protection • Atomic updates • Zero-address checks
+</Info>
+
+## Introduction
+
+The transfer function is the heart of any token system. It moves value from one account to another while ensuring the sender is authorized, has sufficient balance, and the receiver won't overflow. This pattern is fundamental to tokens, payments, and any value exchange system.
+
+<Tip>
+  **Real-world use**: Token transfers, payment systems, rewards distribution,
+  marketplace transactions, or any application where value moves between
+  accounts.
+</Tip>
+
+## The Contract
+
+<Accordion title="View Contract Code">
+
+```compact
+pragma language_version >= 0.17.0;
+
+import CompactStandardLibrary;
+
+// Account balances
+export ledger balances: Map<Either<ZswapCoinPublicKey, ContractAddress>, Uint<128>>;
+
+// Transfer tokens from sender to recipient
+export circuit transfer(
+    to: Either<ZswapCoinPublicKey, ContractAddress>,
+    amount: Uint<128>
+): Boolean {
+    // Get sender (caller of this function)
+    const from = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
+
+    // Perform the transfer
+    _transfer(from, to, amount);
+
+    return true;
+}
+
+// Internal transfer logic
+circuit _transfer(
+    from: Either<ZswapCoinPublicKey, ContractAddress>,
+    to: Either<ZswapCoinPublicKey, ContractAddress>,
+    amount: Uint<128>
+): [] {
+    // 1. Validate addresses
+    assert(!isZeroAddress(from), "Transfer from zero address");
+    assert(!isZeroAddress(to), "Transfer to zero address");
+
+    // 2. Get current balances
+    const fromBalance = getBalance(from);
+    const toBalance = getBalance(to);
+
+    // 3. Check sufficient balance
+    assert(fromBalance >= amount, "Insufficient balance");
+
+    // 4. Check for overflow on receiver
+    const MAX_UINT128 = 340282366920938463463374607431768211455 as Uint<128>;
+    assert(toBalance <= MAX_UINT128 - amount, "Balance overflow");
+
+    // 5. Update balances atomically
+    const newFromBalance = fromBalance - amount;
+    const newToBalance = toBalance + amount;
+
+    balances.insert(disclose(from), disclose(newFromBalance));
+    balances.insert(disclose(to), disclose(newToBalance));
+}
+
+// Helper: Get balance (returns 0 if not found)
+circuit getBalance(account: Either<ZswapCoinPublicKey, ContractAddress>): Uint<128> {
+    if (!balances.member(disclose(account))) {
+        return 0;
+    }
+    return balances.lookup(disclose(account));
+}
+
+// Helper: Check if address is zero (simplified)
+circuit isZeroAddress(addr: Either<ZswapCoinPublicKey, ContractAddress>): Boolean {
+    // Implement your zero-check logic
+    return false; // Placeholder
+}
+```
+
+</Accordion>
+
+## How It Works
+
+### Authorization with ownPublicKey()
+
+```compact
+export circuit transfer(
+    to: Either<ZswapCoinPublicKey, ContractAddress>,
+    amount: Uint<128>
+): Boolean {
+    const from = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
+    _transfer(from, to, amount);
+    return true;
+}
+```
+
+The `transfer()` function automatically uses the caller's identity:
+
+- **`ownPublicKey()`**: Built-in function that returns the public key of whoever called this circuit
+- **Implicit authorization**: No one can transfer from someone else's account
+- **User calls `transfer(recipient, amount)`**: Their own address is automatically the sender
+
+<Note>
+  **Security**: Users never specify "from" in basic transfers. The contract gets
+  it from `ownPublicKey()`, preventing unauthorized transfers.
+</Note>
+
+### Address Validation
+
+```compact
+assert(!isZeroAddress(from), "Transfer from zero address");
+assert(!isZeroAddress(to), "Transfer to zero address");
+```
+
+Prevent transfers involving invalid addresses:
+
+- **Zero address**: Typically represents "no address" or burn address
+- **Validation**: Check both sender and recipient
+- **Early exit**: Fail fast if addresses are invalid
+
+<Warning>
+  **Best Practice**: Always validate addresses before any balance changes. This
+  prevents tokens from being accidentally burned or locked.
+</Warning>
+
+### Balance Checks
+
+```compact
+const fromBalance = getBalance(from);
+assert(fromBalance >= amount, "Insufficient balance");
+```
+
+Verify the sender has enough tokens:
+
+- **Read first**: Get current balance from Map
+- **Validate**: Ensure sufficient funds
+- **Clear error**: Tell user why transfer failed
+
+### Overflow Protection
+
+```compact
+const toBalance = getBalance(to);
+const MAX_UINT128 = 340282366920938463463374607431768211455 as Uint<128>;
+assert(toBalance <= MAX_UINT128 - amount, "Balance overflow");
+```
+
+Prevent integer overflow on the receiver:
+
+- **Maximum value**: Uint\<128\> can hold up to 340 undecillion
+- **Overflow check**: Ensure addition won't wrap around
+- **Safety first**: Better to reject than corrupt state
+
+<Tip>
+  **Why check overflow?** If `toBalance = MAX_UINT128` and you add 1, it wraps
+  to 0. This could destroy tokens or create exploits.
+</Tip>
+
+### Atomic Updates
+
+```compact
+const newFromBalance = fromBalance - amount;
+const newToBalance = toBalance + amount;
+
+balances.insert(disclose(from), disclose(newFromBalance));
+balances.insert(disclose(to), disclose(newToBalance));
+```
+
+Update both balances in sequence:
+
+- **Calculate first**: Compute new values before writing
+- **Write together**: Both updates happen in same transaction
+- **All-or-nothing**: If one fails, entire transaction reverts
+
+The transfer is atomic - either both accounts update or neither does.
+
+## Transfer Patterns
+
+### Self-Transfer Prevention
+
+```compact
+circuit _transfer(
+    from: Either<ZswapCoinPublicKey, ContractAddress>,
+    to: Either<ZswapCoinPublicKey, ContractAddress>,
+    amount: Uint<128>
+): [] {
+    assert(from != to, "Cannot transfer to self");
+    // ... rest of transfer logic
+}
+```
+
+Some contracts block self-transfers to save gas or prevent confusion.
+
+### Zero Amount Handling
+
+```compact
+circuit _transfer(
+    from: Either<ZswapCoinPublicKey, ContractAddress>,
+    to: Either<ZswapCoinPublicKey, ContractAddress>,
+    amount: Uint<128>
+): [] {
+    if (amount == 0) {
+        return; // Allow zero transfers (no-op)
+    }
+    // ... rest of transfer logic
+}
+```
+
+You can either allow or reject zero-amount transfers depending on your use case.
+
+### Transfer with Events (Future)
+
+```compact
+// When Compact supports events/logs:
+export circuit transfer(to: Either<ZswapCoinPublicKey, ContractAddress>, amount: Uint<128>): Boolean {
+    const from = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
+    _transfer(from, to, amount);
+
+    // Emit event for indexers/explorers
+    emitTransfer(from, to, amount);
+
+    return true;
+}
+```
+
+Events help off-chain systems track transfers without reading all state.
+
+## Try It Yourself
+
+<Accordion title="Build and Test">
+
+**1. Create project:**
+
+```bash
+mkdir token-transfer && cd token-transfer
+mkdir -p contracts
+```
+
+**2. Save the contract as `contracts/transfer.compact`**
+
+**3. Add initialization:**
+
+```compact
+export ledger initialized: Boolean;
+
+circuit constructor(): [] {
+    // Give initial balances for testing
+    const alice = left<ZswapCoinPublicKey, ContractAddress>(/* alice's key */);
+    const bob = left<ZswapCoinPublicKey, ContractAddress>(/* bob's key */);
+
+    balances.insert(disclose(alice), 1000);
+    balances.insert(disclose(bob), 500);
+
+    initialized = disclose(true);
+}
+```
+
+**4. Add a balance query:**
+
+```compact
+export circuit myBalance(): Uint<128> {
+    const me = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
+    return getBalance(me);
+}
+```
+
+**5. Test transfers:**
+
+```compact
+// Alice transfers 100 tokens to Bob
+// Alice calls: transfer(bob_address, 100)
+// Result: Alice has 900, Bob has 600
+```
+
+**6. Compile:**
+
+```bash
+compact compile contracts/transfer.compact contracts/managed/transfer
+```
+
+</Accordion>
+
+### Challenge: Add Transfer Limits
+
+<Accordion title="View Solution">
+
+Add per-transfer and daily limits for security:
+
+```compact
+// Daily transfer tracking
+export ledger dailyTransfers: Map<Either<ZswapCoinPublicKey, ContractAddress>, Uint<128>>;
+export ledger lastResetDay: Map<Either<ZswapCoinPublicKey, ContractAddress>, Uint<64>>;
+
+// Transfer with limits
+export circuit transferWithLimit(
+    to: Either<ZswapCoinPublicKey, ContractAddress>,
+    amount: Uint<128>
+): Boolean {
+    const from = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
+
+    // Per-transfer limit: 1000 tokens max
+    const PER_TRANSFER_LIMIT = 1000 as Uint<128>;
+    assert(amount <= PER_TRANSFER_LIMIT, "Exceeds per-transfer limit");
+
+    // Daily limit: 5000 tokens per day
+    const DAILY_LIMIT = 5000 as Uint<128>;
+    const currentDay = getCurrentDay(); // You'd implement this
+
+    // Reset counter if new day
+    if (!lastResetDay.member(disclose(from)) ||
+        lastResetDay.lookup(disclose(from)) != currentDay) {
+        dailyTransfers.insert(disclose(from), 0);
+        lastResetDay.insert(disclose(from), disclose(currentDay));
+    }
+
+    const todayTransferred = dailyTransfers.lookup(disclose(from));
+    assert(todayTransferred + amount <= DAILY_LIMIT, "Exceeds daily limit");
+
+    // Update daily counter
+    dailyTransfers.insert(disclose(from), disclose(todayTransferred + amount));
+
+    // Perform transfer
+    _transfer(from, to, amount);
+
+    return true;
+}
+
+circuit getCurrentDay(): Uint<64> {
+    // Implement based on block timestamp / height
+    return 0; // Placeholder
+}
+```
+
+This adds safety limits for high-value transfers.
+
+</Accordion>
+
+## What's Next
+
+<CardGroup cols={2}>
+  <Card
+    title="Approval & Allowance"
+    icon="handshake"
+    href="/basics/approval-allowance"
+  >
+    Let others transfer on your behalf
+  </Card>
+  <Card title="ERC20 Token" icon="coins" href="/applications/erc20-token">
+    Complete token with all features
+  </Card>
+</CardGroup>
