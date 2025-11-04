@@ -193,29 +193,7 @@ Allowance spending logic:
 3. **Sufficient check**: Verify spender has enough allowance
 4. **Decrease allowance**: Subtract spent amount from remaining allowance
 
-<Tip>
-  **Infinite Approvals**: Setting allowance to MAX_UINT128 means "approve
-  forever". The allowance never decreases, saving gas on future approvals.
-  Common for trusted contracts like official DEX routers.
-</Tip>
-
-### Why Infinite Approvals?
-
-```compact
-// Without infinite approval:
-// User: approve(DEX, 1000)
-// DEX: transferFrom(user, buyer, 500)  // Allowance now 500
-// DEX: transferFrom(user, buyer, 600)  // FAILS! Only 500 remaining
-// User: approve(DEX, 1000) again        // Need to approve again
-
-// With infinite approval:
-// User: approve(DEX, MAX_UINT128)
-// DEX: transferFrom(user, buyer, 500)  // Allowance still MAX_UINT128
-// DEX: transferFrom(user, buyer, 600)  // Works! Still infinite
-// DEX: transferFrom(user, buyer, 1000) // Works! Still infinite
-```
-
-Infinite approvals eliminate the need for repeated approvals.
+See [Overflow Protection](/basics/overflow-protection) for safe arithmetic patterns.
 
 ### Checking Remaining Allowance
 
@@ -243,28 +221,7 @@ Anyone can check how much a spender is allowed to spend:
 - Used by front-ends to show approval status
 - Returns 0 if no approval exists
 
-## Usage Patterns
-
-### Safe TransferFrom
-
-```compact
-export circuit safeTransferFrom(
-    from: Either<ZswapCoinPublicKey, ContractAddress>,
-    to: Either<ZswapCoinPublicKey, ContractAddress>,
-    amount: Uint<128>
-): Boolean {
-    const spender = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
-
-    // Explicitly verify allowance for clearer errors
-    const allowed = allowance(from, spender);
-    assert(allowed >= amount, "Insufficient allowance");
-
-    // Proceed with transfer
-    return transferFrom(from, to, amount);
-}
-```
-
-Explicit allowance check before transferFrom for clearer error messages.
+- Returns 0 if no approval exists
 
 ### Partial Spending
 

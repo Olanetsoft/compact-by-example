@@ -6,28 +6,7 @@ description: "Move tokens between accounts securely."
 "og:description": "Transfer tokens with authorization and balance validation"
 ---
 
-Transfer tokens from one account to another with proper authorization and balance checks.Transfer Function"
-sidebarTitle: "Transfer"
-description: "Build a secure transfer function with authorization checks, balance validation, and safe state updates for moving tokens between accounts."
-"og:title": "Transfer Function Tutorial - Compact by Example"
-"og:description": "Transfer logic with authorization, validation, and safe balance updates"
-
----
-
-<Info>
-  **In this tutorial**: Authorization with ownPublicKey() • Balance validation •
-  Overflow protection • Atomic updates • Zero-address checks
-</Info>
-
-## Introduction
-
-The transfer function is the heart of any token system. It moves value from one account to another while ensuring the sender is authorized, has sufficient balance, and the receiver won't overflow. This pattern is fundamental to tokens, payments, and any value exchange system.
-
-<Tip>
-  **Real-world use**: Token transfers, payment systems, rewards distribution,
-  marketplace transactions, or any application where value moves between
-  accounts.
-</Tip>
+Transfer tokens from one account to another with proper authorization and balance checks.
 
 ## The Contract
 
@@ -138,16 +117,9 @@ const MAX_UINT128 = 340282366920938463463374607431768211455 as Uint<128>;
 assert(toBalance <= MAX_UINT128 - amount, "Balance overflow");
 ```
 
-Prevent integer overflow on the receiver:
+Prevent integer overflow on the receiver - ensure the addition won't wrap around to 0.
 
-- **Maximum value**: Uint\<128\> can hold up to 340 undecillion
-- **Overflow check**: Ensure addition won't wrap around
-- **Safety first**: Better to reject than corrupt state
-
-<Tip>
-  **Why check overflow?** If `toBalance = MAX_UINT128` and you add 1, it wraps
-  to 0. This could destroy tokens or create exploits.
-</Tip>
+See [Overflow Protection](/basics/overflow-protection) for detailed arithmetic safety patterns.
 
 ### Atomic Updates
 
@@ -166,57 +138,6 @@ Update both balances in sequence:
 - **All-or-nothing**: If one fails, entire transaction reverts
 
 The transfer is atomic - either both accounts update or neither does.
-
-## Transfer Patterns
-
-### Self-Transfer Prevention
-
-```compact
-circuit _transfer(
-    from: Either<ZswapCoinPublicKey, ContractAddress>,
-    to: Either<ZswapCoinPublicKey, ContractAddress>,
-    amount: Uint<128>
-): [] {
-    assert(from != to, "Cannot transfer to self");
-    // ... rest of transfer logic
-}
-```
-
-Some contracts block self-transfers to save gas or prevent confusion.
-
-### Zero Amount Handling
-
-```compact
-circuit _transfer(
-    from: Either<ZswapCoinPublicKey, ContractAddress>,
-    to: Either<ZswapCoinPublicKey, ContractAddress>,
-    amount: Uint<128>
-): [] {
-    if (amount == 0) {
-        return; // Allow zero transfers (no-op)
-    }
-    // ... rest of transfer logic
-}
-```
-
-You can either allow or reject zero-amount transfers depending on your use case.
-
-### Transfer with Events (Future)
-
-```compact
-// When Compact supports events/logs:
-export circuit transfer(to: Either<ZswapCoinPublicKey, ContractAddress>, amount: Uint<128>): Boolean {
-    const from = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
-    _transfer(from, to, amount);
-
-    // Emit event for indexers/explorers
-    emitTransfer(from, to, amount);
-
-    return true;
-}
-```
-
-Events help off-chain systems track transfers without reading all state.
 
 ## Try It Yourself
 
