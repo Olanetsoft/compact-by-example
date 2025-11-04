@@ -242,52 +242,6 @@ _transfer(alice, recipient3, 300);
 
 Allowances can be spent gradually over multiple transactions.
 
-## Try It Yourself
-
-<Accordion title="Build and Test">
-
-**1. Create project:**
-
-```bash
-mkdir allowance-spending && cd allowance-spending
-mkdir -p contracts
-```
-
-**2. Save the contract as `contracts/allowance.compact`**
-
-**3. Test spending allowances:**
-
-```compact
-circuit testAllowanceSpending(): [] {
-    const alice = left<ZswapCoinPublicKey, ContractAddress>(/* alice's key */);
-    const bob = left<ZswapCoinPublicKey, ContractAddress>(/* bob's key */);
-    const dex = left<ZswapCoinPublicKey, ContractAddress>(/* dex contract */);
-
-    // Give Alice 1000 tokens
-    balances.insert(disclose(alice), 1000);
-
-    // Alice approves DEX to spend 500 tokens
-    _approve(alice, dex, 500);
-
-    // DEX transfers 200 tokens from Alice to Bob
-    _spendAllowance(alice, dex, 200);
-    _transfer(alice, bob, 200);
-
-    // Verify balances and remaining allowance
-    assert(getBalance(alice) == 800, "Alice balance wrong!");
-    assert(getBalance(bob) == 200, "Bob balance wrong!");
-    assert(allowance(alice, dex) == 300, "Remaining allowance wrong!");
-}
-```
-
-**4. Compile:**
-
-```bash
-compact compile contracts/allowance.compact contracts/managed/allowance
-```
-
-</Accordion>
-
 ## What's Next
 
 <CardGroup cols={2}>

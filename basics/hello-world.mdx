@@ -75,44 +75,6 @@ disclose(message = customMessage);
 
 Use `disclose()` when assigning user input to ledger variables to make data public.
 
-## Try It Yourself
-
-<Accordion title="Build and Compile">
-
-**1. Create the project structure:**
-
-```bash
-mkdir -p my-app/contracts
-cd my-app
-```
-
-**2. Save the contract:**
-
-Create `contracts/hello-world.compact` with the code shown above.
-
-**3. Compile the contract:**
-
-```bash
-compact compile contracts/hello-world.compact contracts/managed/hello-world
-```
-
-This generates zero-knowledge circuits, cryptographic keys, and TypeScript APIs in `contracts/managed/hello-world/`.
-
-**Generated file structure:**
-
-```
-my-app/
-├── contracts/
-│   ├── hello-world.compact
-│   └── managed/hello-world/
-│       ├── contract/       # TypeScript APIs
-│       ├── keys/           # ZK keys
-│       └── zkir/           # Circuits
-└── src/
-```
-
-</Accordion>
-
 ## What's Next
 
 <CardGroup cols={2}>
