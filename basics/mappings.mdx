@@ -6,17 +6,7 @@ description: "Key-value storage using Map data structures."
 "og:description": "Map storage for tokens, balances, and ownership systems"
 ---
 
-Maps store key-value pairs, perfect for tracking balances and ownership.
-
-## Introduction
-
-Maps (also called mappings or hash tables) let you store key-value pairs on-chain. They're essential for tracking balances, ownership, permissions, or any data where you need to look up values by a unique identifier.
-
-<Tip>
-  **Real-world use**: Token balances, NFT ownership, user scores, voting
-  records, access control lists, or any system needing efficient key-based
-  lookups.
-</Tip>
+Store key-value pairs on-chain for tracking balances, ownership, and permissions.
 
 ## The Contract
 
@@ -87,17 +77,7 @@ export circuit subtractBalance(
 export ledger balances: Map<Either<ZswapCoinPublicKey, ContractAddress>, Uint<128>>;
 ```
 
-A Map has two type parameters:
-
-- **Key Type**: `Either<ZswapCoinPublicKey, ContractAddress>` - accounts that can hold balances
-- **Value Type**: `Uint<128>` - the balance amount
-
-Maps are stored in the ledger (on-chain state) and persist between transactions.
-
-<Note>
-  **Key Types**: Can be any basic type (Uint, Address, Boolean, etc.). Complex
-  types like structs may have limitations depending on circuit constraints.
-</Note>
+Maps have key and value type parameters. This one maps accounts to balance amounts.
 
 ### Checking Membership
 
@@ -107,16 +87,7 @@ if (!balances.member(disclose(account))) {
 }
 ```
 
-Before looking up a value, check if the key exists:
-
-- **`member(key)`**: Returns `true` if key exists, `false` otherwise
-- **Always check first**: Looking up a non-existent key may cause errors
-
-<Warning>
-  **Important**: Always use `member()` before `lookup()` or handle the case
-  where a key doesn't exist. Returning a default value (like 0) is a common
-  pattern.
-</Warning>
+Use `member(key)` to check if a key exists before lookup.
 
 ### Looking Up Values
 
@@ -124,10 +95,7 @@ Before looking up a value, check if the key exists:
 return balances.lookup(disclose(account));
 ```
 
-Get the value associated with a key:
-
-- **`lookup(key)`**: Returns the value for the key
-- **Requires `disclose()`**: Maps need disclosed keys for lookups
+Use `lookup(key)` to get the value for a key.
 
 ### Inserting or Updating
 
@@ -135,11 +103,7 @@ Get the value associated with a key:
 balances.insert(disclose(account), disclose(amount));
 ```
 
-Add a new key-value pair or update an existing one:
-
-- **`insert(key, value)`**: Adds or overwrites the entry
-- **Both parameters need `disclose()`**: Make the key and value public to the ledger
-- **Overwrites**: If key exists, the old value is replaced
+Use `insert(key, value)` to add or update an entry.
 
 ### Safe Arithmetic
 
@@ -154,16 +118,7 @@ const newBalance = currentBalance + amount;
 balances.insert(disclose(account), disclose(newBalance));
 ```
 
-Always validate before modifying balances:
-
-- **Overflow check**: Ensure addition won't exceed maximum value
-- **Underflow check**: Ensure balance is sufficient before subtraction
-- **Update atomically**: Read, validate, calculate, then write
-
-<Tip>
-  **Pattern**: The read-check-write pattern prevents common bugs in financial
-  contracts. Always validate state before updating.
-</Tip>
+Always validate before modifying balances to prevent overflow and underflow.
 
 ## Common Patterns
 
@@ -209,15 +164,7 @@ Maps can contain other Maps for complex relationships (used in approval systems)
 
 ### Iterating Over Maps
 
-<Warning>
-**Limitation**: Compact doesn't support iterating over Map keys directly. You must track keys separately if you need to enumerate all entries.
-
-```compact
-// If you need to iterate, maintain a separate list:
-export ledger accountList: Opaque<"array<address>">; // Track all accounts
-```
-
-</Warning>
+Compact doesn't support iterating over Map keys directly. Track keys separately if needed.
 
 ## Try It Yourself
 

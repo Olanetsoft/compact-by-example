@@ -1,26 +1,12 @@
 ---
-title: "First App -Counter"
+title: "First App - Counter"
 sidebarTitle: "First App"
-description: "Build an interactive Compact counter DApp with state management and validation. Learn bounded integers, type safety, and circuit constraints for Midnight Network smart contracts."
-"og:title": "Build a Counter DApp with Compact - Midnight Network Tutorial"
-"og:description": "Learn to create validated smart contracts using Compact's bounded integers and circuit constraints"
+description: "Interactive counter with state management."
+"og:title": "Counter DApp - Compact by Example"
+"og:description": "Build a counter with public ledger state"
 ---
 
-<Info>
-  **What You'll Learn**: - Working with public ledger state using `Counter` type
-  - Creating circuits that modify ledger state - Building and deploying your
-  first interactive DApp - Using the Midnight wallet and providers
-</Info>
-
-## Introduction
-
-A counter is one of the simplest smart contracts you can build - it maintains a number on the blockchain and allows anyone to increment it. This example demonstrates the fundamentals of public state management in Compact and serves as the foundation for understanding more complex DApps.
-
-<Tip>
-  **Real-world use**: While simple, counter logic appears in voting systems,
-  auction bids, NFT minting limits, and any application that needs to track
-  sequential operations on-chain.
-</Tip>
+Maintain a number on the blockchain and increment it.
 
 ## Video Tutorial
 
@@ -64,13 +50,7 @@ export circuit increment(): [] {
 export ledger round: Counter;
 ```
 
-The `Counter` type is a built-in ledger type specifically designed for counting operations. Unlike custom state variables, `Counter` is optimized for increment operations and ensures the value is always publicly visible on the blockchain.
-
-<Note>
-  **Public vs Private State**: The counter's value is stored on the public
-  ledger, meaning anyone can read it. Later examples will show how to use
-  `witness` for private state that stays off-chain.
-</Note>
+`Counter` is a built-in type for counting operations. The value is publicly visible on the blockchain.
 
 ### The Increment Circuit
 
@@ -80,25 +60,7 @@ export circuit increment(): [] {
 }
 ```
 
-Circuits are the functions that users call to interact with your contract. The `increment` circuit:
-
-- Takes no parameters: `()`
-- Returns no values: `[]`
-- Calls the built-in `increment` method on the `Counter` type with value `1`
-
-<Warning>
-  Counter values can only increase - there's no built-in decrement operation.
-  This ensures monotonic growth, which is useful for many applications like
-  round numbers or transaction IDs.
-</Warning>
-
-### Language Version Pragma
-
-```compact
-pragma language_version >= 0.16 && <= 0.18;
-```
-
-This example uses a **version range** (`>= 0.16 && <= 0.18`) instead of an exact version. This is acceptable for simple, stable contracts but exact versions (`0.16`) are recommended for production code to ensure consistent compilation results.
+Increments the counter by 1. Counter values can only increase.
 
 ## Try It Yourself
 
