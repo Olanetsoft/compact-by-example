@@ -102,9 +102,14 @@
   "seo": {
     "indexing": "all",
     "metatags": {
+      "canonical": "https://compact-by-example.org",
       "description": "Learn Midnight's Compact language through practical examples. Master zero-knowledge smart contracts, privacy-preserving DApps, and blockchain development on Midnight Network.",
       "keywords": "Compact language, Midnight Network, zero-knowledge proofs, privacy blockchain, smart contracts, ZK circuits, DApp development, Compact tutorial, blockchain programming",
       "author": "Compact by Example",
+      "language": "en",
+      "distribution": "global",
+      "category": "Technology",
+      "theme-color": "#0066FF",
       "og:type": "website",
       "og:site_name": "Compact by Example",
       "og:title": "Compact by Example - Learn Midnight's Smart Contract Language",
