@@ -69,8 +69,10 @@
           "basics/primitive-types",
           "basics/mappings",
           "basics/transfer",
-          "basics/approval-allowance",
-          "basics/minting-burning"
+          "basics/approval",
+          "basics/allowance",
+          "basics/minting",
+          "basics/burning"
         ]
       },
       {

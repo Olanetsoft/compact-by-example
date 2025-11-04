@@ -53,22 +53,18 @@ circuit _transfer(
     to: Either<ZswapCoinPublicKey, ContractAddress>,
     amount: Uint<128>
 ): [] {
-    // 1. Validate addresses
-    assert(!isZeroAddress(from), "Transfer from zero address");
-    assert(!isZeroAddress(to), "Transfer to zero address");
-
-    // 2. Get current balances
+    // Get current balances
     const fromBalance = getBalance(from);
     const toBalance = getBalance(to);
 
-    // 3. Check sufficient balance
+    // Check sufficient balance
     assert(fromBalance >= amount, "Insufficient balance");
 
-    // 4. Check for overflow on receiver
+    // Check for overflow on receiver
     const MAX_UINT128 = 340282366920938463463374607431768211455 as Uint<128>;
     assert(toBalance <= MAX_UINT128 - amount, "Balance overflow");
 
-    // 5. Update balances atomically
+    // Update balances atomically
     const newFromBalance = fromBalance - amount;
     const newToBalance = toBalance + amount;
 
@@ -82,12 +78,6 @@ circuit getBalance(account: Either<ZswapCoinPublicKey, ContractAddress>): Uint<1
         return 0;
     }
     return balances.lookup(disclose(account));
-}
-
-// Helper: Check if address is zero (simplified)
-circuit isZeroAddress(addr: Either<ZswapCoinPublicKey, ContractAddress>): Boolean {
-    // Implement your zero-check logic
-    return false; // Placeholder
 }
 ```
 
@@ -118,24 +108,6 @@ The `transfer()` function automatically uses the caller's identity:
   **Security**: Users never specify "from" in basic transfers. The contract gets
   it from `ownPublicKey()`, preventing unauthorized transfers.
 </Note>
-
-### Address Validation
-
-```compact
-assert(!isZeroAddress(from), "Transfer from zero address");
-assert(!isZeroAddress(to), "Transfer to zero address");
-```
-
-Prevent transfers involving invalid addresses:
-
-- **Zero address**: Typically represents "no address" or burn address
-- **Validation**: Check both sender and recipient
-- **Early exit**: Fail fast if addresses are invalid
-
-<Warning>
-  **Best Practice**: Always validate addresses before any balance changes. This
-  prevents tokens from being accidentally burned or locked.
-</Warning>
 
 ### Balance Checks
 
@@ -296,12 +268,8 @@ compact compile contracts/transfer.compact contracts/managed/transfer
 ## What's Next
 
 <CardGroup cols={2}>
-  <Card
-    title="Approval & Allowance"
-    icon="handshake"
-    href="/basics/approval-allowance"
-  >
-    Let others transfer on your behalf
+  <Card title="Token Approval" icon="check" href="/basics/approval">
+    Grant permission for delegated transfers
   </Card>
   <Card title="ERC20 Token" icon="coins" href="/applications/erc20-token">
     Complete token with all features

@@ -1,0 +1,423 @@
+---
+title: "Spending Allowance"
+sidebarTitle: "Allowance"
+description: "Learn how to spend approved token allowances in Compact. Master transferFrom, allowance spending, and delegated transfer patterns for DEXs and smart contracts."
+"og:title": "Spending Token Allowance - Compact Tutorial"
+"og:description": "Master delegated transfers and spending approved token allowances"
+---
+
+<Info>
+  **What You'll Learn**: TransferFrom pattern • Spending allowances • Infinite
+  approvals • Allowance tracking • Delegated transfers
+</Info>
+
+## Introduction
+
+Once you've been approved to spend tokens (see [Approval tutorial](/basics/approval)), you can execute transfers on behalf of the token owner. This is how DEXs trade your tokens, payment processors handle subscriptions, and smart contracts interact with your tokens.
+
+<Tip>
+  **Real-world use**: DEX executing trades, subscription payments, staking
+  contracts moving tokens, escrow services, or any contract-to-contract token
+  movement.
+</Tip>
+
+## The Contract
+
+<Accordion title="View Contract Code">
+
+```compact
+pragma language_version >= 0.17.0;
+
+import CompactStandardLibrary;
+
+// Account balances
+export ledger balances: Map<Either<ZswapCoinPublicKey, ContractAddress>, Uint<128>>;
+
+// Allowances: owner -> (spender -> amount)
+export ledger allowances: Map<
+    Either<ZswapCoinPublicKey, ContractAddress>,
+    Map<Either<ZswapCoinPublicKey, ContractAddress>, Uint<128>>
+>;
+
+// Check how much spender is allowed to spend
+export circuit allowance(
+    owner: Either<ZswapCoinPublicKey, ContractAddress>,
+    spender: Either<ZswapCoinPublicKey, ContractAddress>
+): Uint<128> {
+    if (!allowances.member(disclose(owner))) {
+        return 0;
+    }
+
+    const spenderAllowances = allowances.lookup(disclose(owner));
+    if (!spenderAllowances.member(disclose(spender))) {
+        return 0;
+    }
+
+    return spenderAllowances.lookup(disclose(spender));
+}
+
+// Transfer from another account (must be approved)
+export circuit transferFrom(
+    from: Either<ZswapCoinPublicKey, ContractAddress>,
+    to: Either<ZswapCoinPublicKey, ContractAddress>,
+    amount: Uint<128>
+): Boolean {
+    const spender = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
+
+    // Check and spend allowance
+    _spendAllowance(from, spender, amount);
+
+    // Perform transfer
+    _transfer(from, to, amount);
+
+    return true;
+}
+
+// Internal: Spend allowance
+circuit _spendAllowance(
+    owner: Either<ZswapCoinPublicKey, ContractAddress>,
+    spender: Either<ZswapCoinPublicKey, ContractAddress>,
+    amount: Uint<128>
+): [] {
+    const currentAllowance = allowance(owner, spender);
+
+    // Check for infinite allowance
+    const MAX_UINT128 = 340282366920938463463374607431768211455 as Uint<128>;
+    if (currentAllowance == MAX_UINT128) {
+        return; // Infinite approval, don't decrease
+    }
+
+    // Check sufficient allowance
+    assert(currentAllowance >= amount, "Insufficient allowance");
+
+    // Decrease allowance
+    _approve(owner, spender, currentAllowance - amount);
+}
+
+// Internal: Set approval
+circuit _approve(
+    owner: Either<ZswapCoinPublicKey, ContractAddress>,
+    spender: Either<ZswapCoinPublicKey, ContractAddress>,
+    amount: Uint<128>
+): [] {
+    if (!allowances.member(disclose(owner))) {
+        allowances.insert(
+            disclose(owner),
+            default<Map<Either<ZswapCoinPublicKey, ContractAddress>, Uint<128>>>
+        );
+    }
+
+    allowances.lookup(owner).insert(disclose(spender), disclose(amount));
+}
+
+// Internal: Transfer tokens
+circuit _transfer(
+    from: Either<ZswapCoinPublicKey, ContractAddress>,
+    to: Either<ZswapCoinPublicKey, ContractAddress>,
+    amount: Uint<128>
+): [] {
+    const fromBalance = getBalance(from);
+    assert(fromBalance >= amount, "Insufficient balance");
+
+    const toBalance = getBalance(to);
+    const MAX_UINT128 = 340282366920938463463374607431768211455 as Uint<128>;
+    assert(toBalance <= MAX_UINT128 - amount, "Balance overflow");
+
+    balances.insert(disclose(from), disclose(fromBalance - amount));
+    balances.insert(disclose(to), disclose(toBalance + amount));
+}
+
+// Helper
+circuit getBalance(account: Either<ZswapCoinPublicKey, ContractAddress>): Uint<128> {
+    if (!balances.member(disclose(account))) {
+        return 0;
+    }
+    return balances.lookup(disclose(account));
+}
+```
+
+</Accordion>
+
+## How It Works
+
+### TransferFrom Flow
+
+```compact
+export circuit transferFrom(
+    from: Either<ZswapCoinPublicKey, ContractAddress>,
+    to: Either<ZswapCoinPublicKey, ContractAddress>,
+    amount: Uint<128>
+): Boolean {
+    const spender = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
+
+    // Check and spend allowance
+    _spendAllowance(from, spender, amount);
+
+    // Perform transfer
+    _transfer(from, to, amount);
+
+    return true;
+}
+```
+
+The `transferFrom` pattern:
+
+1. **Spender calls** `transferFrom(owner, recipient, amount)`
+2. **Spender = ownPublicKey()**: Caller must be the approved spender
+3. **Verify allowance**: Check spender is approved for at least `amount`
+4. **Decrease allowance**: Spend the approved tokens
+5. **Transfer tokens**: Move from owner to recipient
+
+**Example**: DEX calls `transferFrom(alice, buyer, 500)` to sell Alice's tokens. This works because Alice previously called `approve(DEX, 1000)`.
+
+<Note>
+  **Three parties involved**: Owner (has tokens), Spender (approved to move
+  them), Recipient (receives tokens). Spender and recipient can be different!
+</Note>
+
+### Spending Allowance
+
+```compact
+circuit _spendAllowance(
+    owner: Either<ZswapCoinPublicKey, ContractAddress>,
+    spender: Either<ZswapCoinPublicKey, ContractAddress>,
+    amount: Uint<128>
+): [] {
+    const currentAllowance = allowance(owner, spender);
+
+    // Check for infinite allowance
+    const MAX_UINT128 = 340282366920938463463374607431768211455 as Uint<128>;
+    if (currentAllowance == MAX_UINT128) {
+        return; // Infinite approval, don't decrease
+    }
+
+    // Check sufficient allowance
+    assert(currentAllowance >= amount, "Insufficient allowance");
+
+    // Decrease allowance
+    _approve(owner, spender, currentAllowance - amount);
+}
+```
+
+Allowance spending logic:
+
+1. **Get current allowance**: Check how much spender can spend
+2. **Infinite approval check**: If allowance = MAX_UINT128, skip decrease (infinite approval)
+3. **Sufficient check**: Verify spender has enough allowance
+4. **Decrease allowance**: Subtract spent amount from remaining allowance
+
+<Tip>
+  **Infinite Approvals**: Setting allowance to MAX_UINT128 means "approve
+  forever". The allowance never decreases, saving gas on future approvals.
+  Common for trusted contracts like official DEX routers.
+</Tip>
+
+### Why Infinite Approvals?
+
+```compact
+// Without infinite approval:
+// User: approve(DEX, 1000)
+// DEX: transferFrom(user, buyer, 500)  // Allowance now 500
+// DEX: transferFrom(user, buyer, 600)  // FAILS! Only 500 remaining
+// User: approve(DEX, 1000) again        // Need to approve again
+
+// With infinite approval:
+// User: approve(DEX, MAX_UINT128)
+// DEX: transferFrom(user, buyer, 500)  // Allowance still MAX_UINT128
+// DEX: transferFrom(user, buyer, 600)  // Works! Still infinite
+// DEX: transferFrom(user, buyer, 1000) // Works! Still infinite
+```
+
+Infinite approvals eliminate the need for repeated approvals.
+
+### Checking Remaining Allowance
+
+```compact
+export circuit allowance(
+    owner: Either<ZswapCoinPublicKey, ContractAddress>,
+    spender: Either<ZswapCoinPublicKey, ContractAddress>
+): Uint<128> {
+    if (!allowances.member(disclose(owner))) {
+        return 0;
+    }
+
+    const spenderAllowances = allowances.lookup(disclose(owner));
+    if (!spenderAllowances.member(disclose(spender))) {
+        return 0;
+    }
+
+    return spenderAllowances.lookup(disclose(spender));
+}
+```
+
+Anyone can check how much a spender is allowed to spend:
+
+- Public visibility for transparency
+- Used by front-ends to show approval status
+- Returns 0 if no approval exists
+
+## Usage Patterns
+
+### Safe TransferFrom
+
+```compact
+export circuit safeTransferFrom(
+    from: Either<ZswapCoinPublicKey, ContractAddress>,
+    to: Either<ZswapCoinPublicKey, ContractAddress>,
+    amount: Uint<128>
+): Boolean {
+    const spender = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
+
+    // Explicitly verify allowance for clearer errors
+    const allowed = allowance(from, spender);
+    assert(allowed >= amount, "Insufficient allowance");
+
+    // Proceed with transfer
+    return transferFrom(from, to, amount);
+}
+```
+
+Explicit allowance check before transferFrom for clearer error messages.
+
+### Partial Spending
+
+```compact
+// Alice approves Bob for 1000 tokens
+_approve(alice, bob, 1000);
+
+// Bob can spend in multiple transactions
+_spendAllowance(alice, bob, 300); // Remaining: 700
+_transfer(alice, recipient1, 300);
+
+_spendAllowance(alice, bob, 400); // Remaining: 300
+_transfer(alice, recipient2, 400);
+
+_spendAllowance(alice, bob, 300); // Remaining: 0
+_transfer(alice, recipient3, 300);
+
+// Bob's allowance is now exhausted
+```
+
+Allowances can be spent gradually over multiple transactions.
+
+### DEX Trading Example
+
+```compact
+circuit dexTrade(
+    seller: Either<ZswapCoinPublicKey, ContractAddress>,
+    buyer: Either<ZswapCoinPublicKey, ContractAddress>,
+    tokenAmount: Uint<128>,
+    price: Uint<128>
+): [] {
+    const dex = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
+
+    // Step 1: Spend seller's token allowance
+    _spendAllowance(seller, dex, tokenAmount);
+
+    // Step 2: Transfer tokens from seller to buyer
+    _transfer(seller, buyer, tokenAmount);
+
+    // Step 3: Transfer payment from buyer to seller
+    // (Assuming buyer also approved DEX for payment token)
+    _spendAllowance(buyer, dex, price);
+    _transfer(buyer, seller, price);
+}
+```
+
+DEXs use allowances to move both sides of a trade.
+
+## Security Considerations
+
+### Double-Check Before Spending
+
+```compact
+circuit _spendAllowance(
+    owner: Either<ZswapCoinPublicKey, ContractAddress>,
+    spender: Either<ZswapCoinPublicKey, ContractAddress>,
+    amount: Uint<128>
+): [] {
+    const currentAllowance = allowance(owner, spender);
+
+    // Critical: Check before decreasing
+    assert(currentAllowance >= amount, "Insufficient allowance");
+
+    // ... decrease logic
+}
+```
+
+Always verify sufficient allowance before spending.
+
+### Allowance Front-Running
+
+```compact
+// Problem: User changes approval from 1000 to 500
+// 1. User submits: approve(spender, 500)
+// 2. Spender sees pending tx, quickly submits: transferFrom(user, ..., 1000)
+// 3. Spender's tx mines first → spends 1000
+// 4. User's tx mines → approval now 500
+// 5. Spender can still spend 500 more! (Total: 1500 instead of intended 500)
+
+// Solution: Use increaseAllowance/decreaseAllowance instead
+// Or: Set to 0 first, then set new value
+_approve(owner, spender, 0);
+_approve(owner, spender, newAmount);
+```
+
+Direct approval changes can be front-run. Use increase/decrease functions.
+
+## Try It Yourself
+
+<Accordion title="Build and Test">
+
+**1. Create project:**
+
+```bash
+mkdir allowance-spending && cd allowance-spending
+mkdir -p contracts
+```
+
+**2. Save the contract as `contracts/allowance.compact`**
+
+**3. Test spending allowances:**
+
+```compact
+circuit testAllowanceSpending(): [] {
+    const alice = left<ZswapCoinPublicKey, ContractAddress>(/* alice's key */);
+    const bob = left<ZswapCoinPublicKey, ContractAddress>(/* bob's key */);
+    const dex = left<ZswapCoinPublicKey, ContractAddress>(/* dex contract */);
+
+    // Give Alice 1000 tokens
+    balances.insert(disclose(alice), 1000);
+
+    // Alice approves DEX to spend 500 tokens
+    _approve(alice, dex, 500);
+
+    // DEX transfers 200 tokens from Alice to Bob
+    _spendAllowance(alice, dex, 200);
+    _transfer(alice, bob, 200);
+
+    // Verify balances and remaining allowance
+    assert(getBalance(alice) == 800, "Alice balance wrong!");
+    assert(getBalance(bob) == 200, "Bob balance wrong!");
+    assert(allowance(alice, dex) == 300, "Remaining allowance wrong!");
+}
+```
+
+**4. Compile:**
+
+```bash
+compact compile contracts/allowance.compact contracts/managed/allowance
+```
+
+</Accordion>
+
+## What's Next
+
+<CardGroup cols={2}>
+  <Card title="Token Approval" icon="check" href="/basics/approval">
+    Back to granting approvals
+  </Card>
+  <Card title="ERC20 Token" icon="coins" href="/applications/erc20-token">
+    Complete token implementation
+  </Card>
+</CardGroup>
