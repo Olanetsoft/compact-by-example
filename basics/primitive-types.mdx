@@ -6,29 +6,7 @@ description: "Basic data types: Uint, Field, Bytes, and Opaque."
 "og:description": "Uint, Field, Bytes, and Opaque types for zero-knowledge smart contracts"
 ---
 
-Compact provides several primitive types for building zero-knowledge circuits.rimitive Types"
-sidebarTitle: "Primitive Types"
-description: "Guide to Compact's primitive types: bounded integers (Uint), finite field elements (Field), byte arrays (Bytes), and opaque types for zero-knowledge circuits."
-"og:title": "Compact Type System - Primitive Types for ZK Smart Contracts"
-"og:description": "Uint, Field, Bytes, and Opaque types for building type-safe zero-knowledge smart contracts"
-
----
-
-<Info>
-  **In this tutorial**: Unsigned integers with bounded and sized types • Field
-  elements for zero-knowledge computations • Bytes for fixed-length byte arrays
-  • Opaque types for privacy-preserving data
-</Info>
-
-## Introduction
-
-Compact is statically and strongly typed - every expression has a compile-time type that the compiler verifies. Understanding Compact's primitive types is essential for building correct smart contracts, especially when working with privacy-preserving computations.
-
-<Tip>
-  **Real-world use**: Type safety prevents common vulnerabilities like integer
-  overflow, type confusion, and accidental data exposure. Opaque types enable
-  confidential transactions where amounts and identities remain private.
-</Tip>
+Compact is statically typed - every value has a type that the compiler verifies.
 
 ## The Contract
 
@@ -125,14 +103,14 @@ export ledger commitment: Field;
 
 `Field` represents elements in the scalar prime field of the zero-knowledge proving system. Field arithmetic wraps around (modulo operation).
 
-**When to use**:
+Used for:
 
 - Hash function outputs
 - Cryptographic commitments
 - Zero-knowledge circuit computations
 - Values that need modular arithmetic
 
-**Key differences from Uint**:
+Differences from Uint:
 
 - `Field` arithmetic wraps around on overflow
 - `Uint` subtraction checks for underflow at runtime
@@ -166,17 +144,12 @@ export ledger secretValue: Opaque<"string">;
 
 `Opaque<tag>` types represent values that are **opaque to circuits** but can be manipulated by witnesses. In circuits, they're represented by their hash.
 
-**Allowed tags**:
+Allowed tags:
 
 - `Opaque<"string">` - private strings
 - `Opaque<"Uint8Array">` - private byte arrays
 
-**Privacy model**: Opaque values enable witnesses to perform computations on private data without revealing it on-chain. The circuit only sees the hash.
-
-<Note>
-  **Use Case**: Store encrypted data or secret keys off-chain while proving you
-  know them on-chain through their hash commitments.
-</Note>
+Opaque values let witnesses compute on private data without revealing it on-chain. The circuit only sees the hash.
 
 ### Boolean Type
 
