@@ -1,0 +1,190 @@
+---
+title: "Overflow Protection"
+sidebarTitle: "Overflow Protection"
+description: "Prevent integer overflow and underflow in arithmetic operations."
+"og:title": "Overflow Protection - Compact by Example"
+"og:description": "Safe arithmetic with overflow and underflow checks"
+---
+
+Check for overflow before performing arithmetic to prevent exceeding type bounds.
+
+## The Pattern
+
+<Accordion title="View Code">
+
+```compact
+pragma language_version >= 0.17.0;
+
+import CompactStandardLibrary;
+
+export ledger balance: Uint<128>;
+export ledger totalSupply: Uint<128>;
+
+// Maximum value for Uint<128>
+const MAX_UINT128 = 340282366920938463463374607431768211455 as Uint<128>;
+
+// Safe addition with overflow check
+export circuit safeAdd(a: Uint<128>, b: Uint<128>): Uint<128> {
+    assert(a <= MAX_UINT128 - b, "Addition overflow");
+    return a + b;
+}
+
+// Safe subtraction with underflow check
+export circuit safeSub(a: Uint<128>, b: Uint<128>): Uint<128> {
+    assert(a >= b, "Subtraction underflow");
+    return a - b;
+}
+
+// Safe multiplication with overflow check
+export circuit safeMul(a: Uint<128>, b: Uint<128>): Uint<128> {
+    if (a == 0 || b == 0) {
+        return 0;
+    }
+    assert(a <= MAX_UINT128 / b, "Multiplication overflow");
+    return a * b;
+}
+```
+
+</Accordion>
+
+## Overflow Checks
+
+### Addition Overflow
+
+```compact
+const MAX_UINT128 = 340282366920938463463374607431768211455 as Uint<128>;
+
+// Check: a + b won't exceed MAX_UINT128
+assert(a <= MAX_UINT128 - b, "Addition overflow");
+const result = a + b;
+```
+
+Before adding, verify that `a + b` won't exceed the maximum value.
+
+**Example**: Adding balances, increasing supply
+
+```compact
+// Check total supply won't overflow
+assert(totalSupply <= MAX_UINT128 - amount, "Total supply overflow");
+totalSupply = disclose(totalSupply + amount);
+```
+
+### Subtraction Underflow
+
+```compact
+// Check: a - b won't go below zero
+assert(a >= b, "Subtraction underflow");
+const result = a - b;
+```
+
+Before subtracting, verify that `a >= b` to prevent negative results.
+
+**Example**: Deducting balances, burning tokens
+
+```compact
+// Check sufficient balance
+const currentBalance = getBalance(account);
+assert(currentBalance >= amount, "Insufficient balance");
+balances.insert(disclose(account), disclose(currentBalance - amount));
+```
+
+### Multiplication Overflow
+
+```compact
+// Check: a * b won't exceed MAX_UINT128
+if (a == 0 || b == 0) {
+    return 0;
+}
+assert(a <= MAX_UINT128 / b, "Multiplication overflow");
+const result = a * b;
+```
+
+Before multiplying, verify the result won't overflow.
+
+**Example**: Calculating percentages, fees
+
+```compact
+// Calculate 1% fee
+const fee = (amount * 1) / 100; // Safe because 1/100 < 1
+```
+
+## Common Use Cases
+
+### Balance Updates
+
+```compact
+// Increase balance (minting, receiving)
+const currentBalance = getBalance(to);
+assert(currentBalance <= MAX_UINT128 - amount, "Balance overflow");
+balances.insert(disclose(to), disclose(currentBalance + amount));
+
+// Decrease balance (burning, sending)
+const currentBalance = getBalance(from);
+assert(currentBalance >= amount, "Insufficient balance");
+balances.insert(disclose(from), disclose(currentBalance - amount));
+```
+
+### Supply Management
+
+```compact
+// Increase total supply (minting)
+assert(totalSupply <= MAX_UINT128 - amount, "Total supply overflow");
+totalSupply = disclose(totalSupply + amount);
+
+// Decrease total supply (burning)
+assert(totalSupply >= amount, "Burn exceeds supply");
+totalSupply = disclose(totalSupply - amount);
+```
+
+### Allowance Spending
+
+```compact
+// Decrease allowance
+const currentAllowance = allowance(owner, spender);
+assert(currentAllowance >= amount, "Insufficient allowance");
+_approve(owner, spender, currentAllowance - amount);
+```
+
+## Why It Matters
+
+**Without checks**:
+
+```compact
+// Dangerous: No overflow check
+balance = balance + largeAmount; // Could wrap around to 0!
+```
+
+If `balance = MAX_UINT128` and you add 1, without checks it wraps to 0, destroying value.
+
+**With checks**:
+
+```compact
+// Safe: Transaction fails before corruption
+assert(balance <= MAX_UINT128 - largeAmount, "Overflow");
+balance = balance + largeAmount; // Only executes if safe
+```
+
+The transaction reverts instead of corrupting state.
+
+## Type Bounds
+
+Different `Uint` sizes have different maximum values:
+
+- `Uint<8>` max: 255
+- `Uint<16>` max: 65,535
+- `Uint<32>` max: 4,294,967,295
+- `Uint<64>` max: 18,446,744,073,709,551,615
+- `Uint<128>` max: 340,282,366,920,938,463,463,374,607,431,768,211,455
+
+Always check against the appropriate maximum for your type.
+
+## What's Next
+
+<CardGroup cols={2}>
+  <Card title="Transfer" icon="arrow-right-arrow-left" href="/basics/transfer">
+    Apply overflow checks in transfers
+  </Card>
+  <Card title="Minting" icon="plus" href="/basics/minting">
+    Use overflow protection when creating tokens
+  </Card>
+</CardGroup>

@@ -68,6 +68,8 @@
           "basics/first-app",
           "basics/primitive-types",
           "basics/mappings",
+          "basics/overflow-protection",
+          "basics/access-control",
           "basics/transfer",
           "basics/approval",
           "basics/allowance",

@@ -119,20 +119,14 @@ circuit _mint(
 
 Minting flow:
 
-1. **Check total supply overflow**: Ensure we don't exceed Uint\<128\> max (340,282,366,920,938,463,463,374,607,431,768,211,455)
+1. **Check total supply overflow**: Prevent exceeding Uint\<128\> maximum
 2. **Increase total supply**: Add new tokens to circulation
-3. **Get current balance**: Check recipient's current balance
-4. **Check account overflow**: Ensure recipient balance won't overflow
-5. **Credit account**: Add tokens to recipient's balance
+3. **Check account overflow**: Prevent recipient balance overflow
+4. **Credit account**: Add tokens to recipient's balance
 
-**Result**: New tokens are created from nothing and added to an account.
+See [Overflow Protection](/basics/overflow-protection) for detailed arithmetic safety patterns.
 
-<Warning>
-  **Critical**: Always check BOTH total supply overflow AND account balance
-  overflow. Forgetting either can corrupt state or cause transaction failures.
-</Warning>
-
-### Public vs Internal Functions
+### Access Control
 
 ```compact
 // Public: Anyone can call (should add access control!)
@@ -142,124 +136,11 @@ export circuit mint(
 ): [] {
     _mint(account, amount);
 }
-
-// Internal: Only callable within contract
-circuit _mint(
-    account: Either<ZswapCoinPublicKey, ContractAddress>,
-    amount: Uint<128>
-): [] {
-    // ... minting logic
-}
 ```
 
-- **Public functions** (`export circuit`): Can be called externally - **add access control**!
-- **Internal functions** (no `export`): Only used within the contract
+The example `mint()` function has NO access control - anyone can mint unlimited tokens!
 
-<Warning>
-  **Security Risk**: The example `mint()` function has NO access control. Anyone
-  can mint unlimited tokens! In production, add owner-only or role-based access
-  control to the mint function.
-</Warning>
-
-## Supply Management Patterns
-
-### Capped Supply
-
-```compact
-export ledger MAX_SUPPLY: Uint<128>;
-
-circuit constructor(): [] {
-    MAX_SUPPLY = disclose(1000000 as Uint<128>); // Max 1 million tokens
-}
-
-circuit _mint(
-    account: Either<ZswapCoinPublicKey, ContractAddress>,
-    amount: Uint<128>
-): [] {
-    // Check against max supply cap
-    assert(totalSupply + amount <= MAX_SUPPLY, "Exceeds max supply");
-
-    const MAX_UINT128 = 340282366920938463463374607431768211455 as Uint<128>;
-    assert(totalSupply <= MAX_UINT128 - amount, "Total supply overflow");
-
-    // ... rest of minting logic
-    totalSupply = disclose(totalSupply + amount);
-
-    const currentBalance = getBalance(account);
-    assert(currentBalance <= MAX_UINT128 - amount, "Balance overflow");
-
-    balances.insert(disclose(account), disclose(currentBalance + amount));
-}
-```
-
-Enforce a hard cap on total supply (like Bitcoin's 21 million).
-
-### Inflationary Tokenomics
-
-```compact
-export ledger lastInflation: Uint<64>;
-export ledger inflationRate: Uint<8>; // Percentage
-
-export circuit applyInflation(): [] {
-    // Calculate time since last inflation
-    const timePassed = getCurrentTime() - lastInflation;
-    const DAY_IN_SECONDS = 86400 as Uint<64>;
-
-    if (timePassed >= DAY_IN_SECONDS) {
-        // Mint new tokens (e.g., 2% daily inflation)
-        const inflation = (totalSupply * inflationRate as Uint<128>) / 100;
-
-        const treasury = getTreasuryAddress();
-        _mint(treasury, inflation);
-
-        lastInflation = disclose(getCurrentTime());
-    }
-}
-```
-
-Automatic inflation for staking rewards or incentive programs.
-
-### Owner-Only Minting
-
-```compact
-export ledger owner: Either<ZswapCoinPublicKey, ContractAddress>;
-
-circuit constructor(): [] {
-    owner = disclose(left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey()));
-}
-
-export circuit mint(
-    account: Either<ZswapCoinPublicKey, ContractAddress>,
-    amount: Uint<128>
-): [] {
-    // Only owner can mint
-    const caller = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
-    assert(caller == owner, "Only owner can mint");
-
-    _mint(account, amount);
-}
-```
-
-Restrict minting to contract owner only.
-
-### Initial Supply Distribution
-
-```compact
-circuit constructor(): [] {
-    const founder1 = /* founder 1 address */;
-    const founder2 = /* founder 2 address */;
-    const treasury = /* treasury address */;
-
-    // Initial distribution
-    _mint(founder1, 100000); // 100k tokens to founder 1
-    _mint(founder2, 100000); // 100k tokens to founder 2
-    _mint(treasury, 800000); // 800k tokens to treasury
-
-    // Total initial supply: 1 million tokens
-}
-```
-
-Distribute initial token supply in constructor.
+See [Access Control](/basics/access-control) for owner-only and role-based patterns.
 
 ## Try It Yourself
 
