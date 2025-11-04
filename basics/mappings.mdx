@@ -1,0 +1,320 @@
+---
+title: "Mappings"
+sidebarTitle: "Mappings"
+description: "Learn how to use Map data structures in Compact for key-value storage. Perfect for balance tracking, ownership records, and state management in smart contracts."
+"og:title": "Compact Mappings Tutorial - Map Data Structure"
+"og:description": "Master Map storage in Compact for building tokens, balances, and ownership systems"
+---
+
+<Info>
+  **What You'll Learn**: Map declaration • Insert and lookup • Checking
+  membership • Default values • Common patterns
+</Info>
+
+## Introduction
+
+Maps (also called mappings or hash tables) let you store key-value pairs on-chain. They're essential for tracking balances, ownership, permissions, or any data where you need to look up values by a unique identifier.
+
+<Tip>
+  **Real-world use**: Token balances, NFT ownership, user scores, voting
+  records, access control lists, or any system needing efficient key-based
+  lookups.
+</Tip>
+
+## The Contract
+
+<Accordion title="View Contract Code">
+
+```compact
+pragma language_version >= 0.17.0;
+
+import CompactStandardLibrary;
+
+// Simple balance tracker
+export ledger balances: Map<Either<ZswapCoinPublicKey, ContractAddress>, Uint<128>>;
+
+// Get balance for an account
+export circuit getBalance(account: Either<ZswapCoinPublicKey, ContractAddress>): Uint<128> {
+    // Check if account exists in map
+    if (!balances.member(disclose(account))) {
+        return 0; // Return 0 for accounts with no balance
+    }
+    return balances.lookup(disclose(account));
+}
+
+// Set balance for an account
+export circuit setBalance(
+    account: Either<ZswapCoinPublicKey, ContractAddress>,
+    amount: Uint<128>
+): [] {
+    balances.insert(disclose(account), disclose(amount));
+}
+
+// Add to existing balance
+export circuit addBalance(
+    account: Either<ZswapCoinPublicKey, ContractAddress>,
+    amount: Uint<128>
+): [] {
+    const currentBalance = getBalance(account);
+
+    // Check for overflow
+    const MAX_UINT128 = 340282366920938463463374607431768211455 as Uint<128>;
+    assert(currentBalance <= MAX_UINT128 - amount, "Balance overflow");
+
+    const newBalance = currentBalance + amount;
+    balances.insert(disclose(account), disclose(newBalance));
+}
+
+// Subtract from balance
+export circuit subtractBalance(
+    account: Either<ZswapCoinPublicKey, ContractAddress>,
+    amount: Uint<128>
+): [] {
+    const currentBalance = getBalance(account);
+
+    // Check sufficient balance
+    assert(currentBalance >= amount, "Insufficient balance");
+
+    const newBalance = currentBalance - amount;
+    balances.insert(disclose(account), disclose(newBalance));
+}
+```
+
+</Accordion>
+
+## How It Works
+
+### Map Declaration
+
+```compact
+export ledger balances: Map<Either<ZswapCoinPublicKey, ContractAddress>, Uint<128>>;
+```
+
+A Map has two type parameters:
+
+- **Key Type**: `Either<ZswapCoinPublicKey, ContractAddress>` - accounts that can hold balances
+- **Value Type**: `Uint<128>` - the balance amount
+
+Maps are stored in the ledger (on-chain state) and persist between transactions.
+
+<Note>
+  **Key Types**: Can be any basic type (Uint, Address, Boolean, etc.). Complex
+  types like structs may have limitations depending on circuit constraints.
+</Note>
+
+### Checking Membership
+
+```compact
+if (!balances.member(disclose(account))) {
+    return 0;
+}
+```
+
+Before looking up a value, check if the key exists:
+
+- **`member(key)`**: Returns `true` if key exists, `false` otherwise
+- **Always check first**: Looking up a non-existent key may cause errors
+
+<Warning>
+  **Important**: Always use `member()` before `lookup()` or handle the case
+  where a key doesn't exist. Returning a default value (like 0) is a common
+  pattern.
+</Warning>
+
+### Looking Up Values
+
+```compact
+return balances.lookup(disclose(account));
+```
+
+Get the value associated with a key:
+
+- **`lookup(key)`**: Returns the value for the key
+- **Requires `disclose()`**: Maps need disclosed keys for lookups
+
+### Inserting or Updating
+
+```compact
+balances.insert(disclose(account), disclose(amount));
+```
+
+Add a new key-value pair or update an existing one:
+
+- **`insert(key, value)`**: Adds or overwrites the entry
+- **Both parameters need `disclose()`**: Make the key and value public to the ledger
+- **Overwrites**: If key exists, the old value is replaced
+
+### Safe Arithmetic
+
+```compact
+const currentBalance = getBalance(account);
+
+// Check for overflow before adding
+const MAX_UINT128 = 340282366920938463463374607431768211455 as Uint<128>;
+assert(currentBalance <= MAX_UINT128 - amount, "Balance overflow");
+
+const newBalance = currentBalance + amount;
+balances.insert(disclose(account), disclose(newBalance));
+```
+
+Always validate before modifying balances:
+
+- **Overflow check**: Ensure addition won't exceed maximum value
+- **Underflow check**: Ensure balance is sufficient before subtraction
+- **Update atomically**: Read, validate, calculate, then write
+
+<Tip>
+  **Pattern**: The read-check-write pattern prevents common bugs in financial
+  contracts. Always validate state before updating.
+</Tip>
+
+## Common Patterns
+
+### Initialize with Default
+
+```compact
+export circuit ensureAccount(account: Either<ZswapCoinPublicKey, ContractAddress>): [] {
+    if (!balances.member(disclose(account))) {
+        balances.insert(disclose(account), 0);
+    }
+}
+```
+
+Create an entry if it doesn't exist.
+
+### Nested Maps
+
+```compact
+// Allowances: owner -> (spender -> amount)
+export ledger allowances: Map<
+    Either<ZswapCoinPublicKey, ContractAddress>,
+    Map<Either<ZswapCoinPublicKey, ContractAddress>, Uint<128>>
+>;
+
+export circuit getAllowance(
+    owner: Either<ZswapCoinPublicKey, ContractAddress>,
+    spender: Either<ZswapCoinPublicKey, ContractAddress>
+): Uint<128> {
+    if (!allowances.member(disclose(owner))) {
+        return 0;
+    }
+
+    const spenderAllowances = allowances.lookup(disclose(owner));
+    if (!spenderAllowances.member(disclose(spender))) {
+        return 0;
+    }
+
+    return spenderAllowances.lookup(disclose(spender));
+}
+```
+
+Maps can contain other Maps for complex relationships (used in approval systems).
+
+### Iterating Over Maps
+
+<Warning>
+**Limitation**: Compact doesn't support iterating over Map keys directly. You must track keys separately if you need to enumerate all entries.
+
+```compact
+// If you need to iterate, maintain a separate list:
+export ledger accountList: Opaque<"array<address>">; // Track all accounts
+```
+
+</Warning>
+
+## Try It Yourself
+
+<Accordion title="Build and Test">
+
+**1. Create project:**
+
+```bash
+mkdir balance-tracker && cd balance-tracker
+mkdir -p contracts
+```
+
+**2. Save the contract as `contracts/balances.compact`**
+
+**3. Add a getter for your own balance:**
+
+```compact
+export circuit getMyBalance(): Uint<128> {
+    const me = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
+    return getBalance(me);
+}
+```
+
+**4. Test the contract:**
+
+```compact
+// In constructor or init function
+circuit constructor(): [] {
+    const alice = left<ZswapCoinPublicKey, ContractAddress>(/* alice's key */);
+    const bob = left<ZswapCoinPublicKey, ContractAddress>(/* bob's key */);
+
+    setBalance(alice, 1000);
+    setBalance(bob, 500);
+
+    addBalance(alice, 100); // Alice now has 1100
+    subtractBalance(bob, 50); // Bob now has 450
+}
+```
+
+**5. Compile:**
+
+```bash
+compact compile contracts/balances.compact contracts/managed/balances
+```
+
+</Accordion>
+
+### Challenge: Add a Transfer Function
+
+<Accordion title="View Solution">
+
+Combine read and write operations to transfer balances:
+
+```compact
+export circuit transfer(
+    from: Either<ZswapCoinPublicKey, ContractAddress>,
+    to: Either<ZswapCoinPublicKey, ContractAddress>,
+    amount: Uint<128>
+): [] {
+    // Check authorization (caller must be 'from')
+    const caller = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
+    assert(caller == from, "Not authorized");
+
+    // Check sufficient balance
+    const fromBalance = getBalance(from);
+    assert(fromBalance >= amount, "Insufficient balance");
+
+    const toBalance = getBalance(to);
+
+    // Check overflow for receiver
+    const MAX_UINT128 = 340282366920938463463374607431768211455 as Uint<128>;
+    assert(toBalance <= MAX_UINT128 - amount, "Balance overflow");
+
+    // Update balances
+    subtractBalance(from, amount);
+    addBalance(to, amount);
+}
+```
+
+This transfer function is the foundation of token contracts!
+
+</Accordion>
+
+## What's Next
+
+<CardGroup cols={2}>
+  <Card
+    title="Transfer Function"
+    icon="arrow-right-arrow-left"
+    href="/basics/transfer"
+  >
+    Build a token transfer system
+  </Card>
+  <Card title="ERC20 Token" icon="coins" href="/applications/erc20-token">
+    See Maps in a complete token
+  </Card>
+</CardGroup>
