@@ -1,25 +1,12 @@
 ---
 title: "Spending Allowance"
 sidebarTitle: "Allowance"
-description: "Learn how to spend approved token allowances in Compact. Master transferFrom, allowance spending, and delegated transfer patterns for DEXs and smart contracts."
-"og:title": "Spending Token Allowance - Compact Tutorial"
-"og:description": "Master delegated transfers and spending approved token allowances"
+description: "Spend tokens you've been approved to use."
+"og:title": "Spending Allowance - Compact by Example"
+"og:description": "Delegated transfers using transferFrom"
 ---
 
-<Info>
-  **What You'll Learn**: TransferFrom pattern • Spending allowances • Infinite
-  approvals • Allowance tracking • Delegated transfers
-</Info>
-
-## Introduction
-
-Once you've been approved to spend tokens (see [Approval tutorial](/basics/approval)), you can execute transfers on behalf of the token owner. This is how DEXs trade your tokens, payment processors handle subscriptions, and smart contracts interact with your tokens.
-
-<Tip>
-  **Real-world use**: DEX executing trades, subscription payments, staking
-  contracts moving tokens, escrow services, or any contract-to-contract token
-  movement.
-</Tip>
+Once approved, you can transfer tokens on behalf of the owner using `transferFrom`.
 
 ## The Contract
 
