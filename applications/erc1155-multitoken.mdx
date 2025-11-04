@@ -30,6 +30,9 @@ pragma language_version >= 0.17.0;
 
 import CompactStandardLibrary;
 
+// Initialization state
+export ledger _isInitialized: Boolean;
+
 // Balances per token ID per account
 export ledger _balances: Map<Uint<128>, Map<Either<ZswapCoinPublicKey, ContractAddress>, Uint<128>>>;
 
@@ -39,11 +42,18 @@ export ledger _operatorApprovals: Map<Either<ZswapCoinPublicKey, ContractAddress
 // Token metadata URIs
 export ledger _uris: Map<Uint<128>, Opaque<"string">>;
 
+// Initialize the contract
+export circuit initialize(baseUri: Opaque<"string">): [] {
+    assert(!_isInitialized, "Already initialized");
+    _isInitialized = disclose(true);
+}
+
 // Get balance of account for token ID
 export circuit balanceOf(
     account: Either<ZswapCoinPublicKey, ContractAddress>,
     id: Uint<128>
 ): Uint<128> {
+    assert(_isInitialized, "Not initialized");
     if (!_balances.member(disclose(id))) {
         return 0;
     }
@@ -61,6 +71,7 @@ export circuit setApprovalForAll(
     operator: Either<ZswapCoinPublicKey, ContractAddress>,
     approved: Boolean
 ): [] {
+    assert(_isInitialized, "Not initialized");
     const owner = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
     _setApprovalForAll(owner, operator, approved);
 }
@@ -70,6 +81,7 @@ export circuit isApprovedForAll(
     account: Either<ZswapCoinPublicKey, ContractAddress>,
     operator: Either<ZswapCoinPublicKey, ContractAddress>
 ): Boolean {
+    assert(_isInitialized, "Not initialized");
     if (_operatorApprovals.member(disclose(account)) &&
         _operatorApprovals.lookup(account).member(disclose(operator))) {
         return _operatorApprovals.lookup(account).lookup(disclose(operator));
@@ -84,6 +96,7 @@ export circuit safeTransferFrom(
     id: Uint<128>,
     value: Uint<128>
 ): [] {
+    assert(_isInitialized, "Not initialized");
     const caller = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
     assert(from == caller || isApprovedForAll(from, caller), "Not authorized");
     assert(!isKeyOrAddressZero(to), "Invalid receiver");
@@ -93,6 +106,7 @@ export circuit safeTransferFrom(
 
 // Get token URI
 export circuit uri(tokenId: Uint<128>): Opaque<"string"> {
+    assert(_isInitialized, "Not initialized");
     if (!_uris.member(disclose(tokenId))) {
         return ""; // Empty string
     }
@@ -105,6 +119,7 @@ export circuit _mint(
     id: Uint<128>,
     value: Uint<128>
 ): [] {
+    assert(_isInitialized, "Not initialized");
     assert(!isKeyOrAddressZero(to), "Invalid receiver");
     _update(burnAddress(), to, id, value);
 }
@@ -115,12 +130,14 @@ export circuit _burn(
     id: Uint<128>,
     value: Uint<128>
 ): [] {
+    assert(_isInitialized, "Not initialized");
     assert(!isKeyOrAddressZero(from), "Invalid sender");
     _update(from, burnAddress(), id, value);
 }
 
 // Set token URI
 export circuit _setURI(id: Uint<128>, newuri: Opaque<"string">): [] {
+    assert(_isInitialized, "Not initialized");
     _uris.insert(disclose(id), disclose(newuri));
 }
 
@@ -172,14 +189,20 @@ circuit _setApprovalForAll(
     _operatorApprovals.lookup(owner).insert(disclose(operator), disclose(approved));
 }
 
-// Helper functions
-circuit isKeyOrAddressZero(addr: Either<ZswapCoinPublicKey, ContractAddress>): Boolean {
-    return false; // Simplified - implement your zero check
+// Helper Functions
+// These would typically be imported from OpenZeppelin's Utils module
+circuit isKeyOrAddressZero(keyOrAddress: Either<ZswapCoinPublicKey, ContractAddress>): Boolean {
+    return isContractAddress(keyOrAddress)
+        ? default<ContractAddress> == keyOrAddress.right
+        : default<ZswapCoinPublicKey> == keyOrAddress.left;
+}
+
+circuit isContractAddress(keyOrAddress: Either<ZswapCoinPublicKey, ContractAddress>): Boolean {
+    return !keyOrAddress.is_left;
 }
 
 circuit burnAddress(): Either<ZswapCoinPublicKey, ContractAddress> {
-    // Return your burn address
-    return left<ZswapCoinPublicKey, ContractAddress>(/* zero key */);
+    return left<ZswapCoinPublicKey, ContractAddress>(default<ZswapCoinPublicKey>);
 }
 ```
 
@@ -187,204 +210,93 @@ circuit burnAddress(): Either<ZswapCoinPublicKey, ContractAddress> {
 
 ## How It Works
 
-### Multi-Token Balance Structure
+This ERC1155 implementation enables multiple token types in a single contract. For detailed explanations of core concepts, see the linked basics tutorials.
 
-```compact
-export ledger _balances: Map<Uint<128>, Map<Either<ZswapCoinPublicKey, ContractAddress>, Uint<128>>>;
+### Initialization Protection
 
-export circuit balanceOf(
-    account: Either<ZswapCoinPublicKey, ContractAddress>,
-    id: Uint<128>
-): Uint<128> {
-    if (!_balances.member(disclose(id))) {
-        return 0;
-    }
+Uses the same initialization guard pattern as ERC20/ERC721 to ensure `initialize()` is called once to set the base URI.
 
-    const accountBalances = _balances.lookup(disclose(id));
-    if (!accountBalances.member(disclose(account))) {
-        return 0;
-    }
+### Nested Map Balance Structure
 
-    return accountBalances.lookup(disclose(account));
-}
+**Key Data Structure**:
+
 ```
-
-The nested map structure is key:
+_balances: Map<Uint<128>, Map<Either<ZswapCoinPublicKey, ContractAddress>, Uint<128>>>
+```
 
 - **Outer Map**: Token ID → Inner Map
 - **Inner Map**: Account → Balance
 
-This means:
+This allows one contract to manage multiple independent token types (ID 1: Gold, ID 2: Silver, ID 100: Legendary Sword). See [Mappings tutorial](/basics/mappings) for nested Map patterns.
 
-- Token ID 1 (Gold Coins): Alice has 100, Bob has 50
-- Token ID 2 (Silver Coins): Alice has 200, Charlie has 75
-- Token ID 3 (Legendary Sword): Dave has 1 (NFT)
+### Mixed Token Types
 
-<Note>
-  **Design Pattern**: The nested map allows efficient lookup of any account's
-  balance for any token type. Each token ID is independent.
-</Note>
+**Fungible**: `_mint(alice, 1, 1000)` - 1000 copies of token ID 1 (Gold Coins)  
+**Non-Fungible**: `_mint(bob, 100, 1)` - 1 unique token ID 100 (Legendary Sword)  
+**Semi-Fungible**: `_mint(carol, 50, 10)` - 10 limited copies of token ID 50 (Shield)
 
-### Token Types in One Contract
+All coexist in the same contract. Organization tip: Use ID ranges (1-999: currency, 1000-9999: items, 10000+: legendaries).
 
-```compact
-// Fungible tokens (many copies)
-_mint(alice, 1, 1000); // Alice gets 1000 Gold Coins (ID 1)
-_mint(bob, 1, 500);    // Bob gets 500 Gold Coins (ID 1)
+### ERC1155-Specific Features
 
-// Non-fungible token (unique)
-_mint(charlie, 100, 1); // Charlie gets unique Legendary Sword (ID 100)
+**Operator-Only Approval**:
 
-// Semi-fungible tokens (limited supply)
-_mint(dave, 50, 10);   // Dave gets 10 Common Shields (ID 50)
-```
+- Only `setApprovalForAll()` (no single-token approval like ERC721)
+- Operator can transfer ANY token type you own (all-or-nothing)
+- Simpler but less granular than ERC721
 
-All three token types coexist in the same contract:
+**Transfer with Value Parameter**:
 
-- **Fungible** (ID 1): Gold coins - mint unlimited amounts
-- **NFT** (ID 100): Legendary sword - only 1 exists
-- **Semi-fungible** (ID 50): Shields - limited quantity (10)
+- Transfer partial amounts: `safeTransferFrom(alice, bob, 1, 500)` - Transfer 500 of token ID 1
+- Transfer singles: `safeTransferFrom(alice, bob, 100, 1)` - Transfer unique NFT
+- Authorization: owner or approved operator only
 
-<Tip>
-  **Game Design**: Use ID ranges for organization: - IDs 1-999: Currencies and
-  resources - IDs 1000-9999: Common items - IDs 10000+: Unique legendary items
-</Tip>
-
-### Operator Approvals
-
-```compact
-export circuit setApprovalForAll(
-    operator: Either<ZswapCoinPublicKey, ContractAddress>,
-    approved: Boolean
-): [] {
-    const owner = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
-    _setApprovalForAll(owner, operator, approved);
-}
-
-export circuit isApprovedForAll(
-    account: Either<ZswapCoinPublicKey, ContractAddress>,
-    operator: Either<ZswapCoinPublicKey, ContractAddress>
-): Boolean {
-    if (_operatorApprovals.member(disclose(account)) &&
-        _operatorApprovals.lookup(account).member(disclose(operator))) {
-        return _operatorApprovals.lookup(account).lookup(disclose(operator));
-    }
-    return false;
-}
-```
-
-Unlike ERC721, ERC1155 only has operator approval (all-or-nothing):
-
-- **Approve**: Operator can transfer ANY token type you own
-- **No single token approval**: Can't approve just one token ID
-
-This is simpler but less granular than ERC721.
-
-### Transfers
-
-```compact
-export circuit safeTransferFrom(
-    from: Either<ZswapCoinPublicKey, ContractAddress>,
-    to: Either<ZswapCoinPublicKey, ContractAddress>,
-    id: Uint<128>,
-    value: Uint<128>
-): [] {
-    const caller = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
-    assert(from == caller || isApprovedForAll(from, caller), "Not authorized");
-    assert(!isKeyOrAddressZero(to), "Invalid receiver");
-
-    _update(from, to, id, value);
-}
-
-circuit _update(
-    from: Either<ZswapCoinPublicKey, ContractAddress>,
-    to: Either<ZswapCoinPublicKey, ContractAddress>,
-    id: Uint<128>,
-    value: Uint<128>
-): [] {
-    if (!isKeyOrAddressZero(disclose(from))) {
-        const fromBalance = balanceOf(from, id);
-        assert(fromBalance >= value, "Insufficient balance");
-
-        const newBalance = fromBalance - value;
-        if (!_balances.member(disclose(id))) {
-            _balances.insert(disclose(id), default<Map<Either<ZswapCoinPublicKey, ContractAddress>, Uint<128>>>);
-        }
-        _balances.lookup(id).insert(disclose(from), disclose(newBalance));
-    }
-
-    if (!isKeyOrAddressZero(disclose(to))) {
-        const toBalance = balanceOf(to, id);
-        const MAX_UINT128 = 340282366920938463463374607431768211455 as Uint<128>;
-        assert(toBalance <= MAX_UINT128 - value, "Balance overflow");
-
-        const newBalance = toBalance + value;
-        if (!_balances.member(disclose(id))) {
-            _balances.insert(disclose(id), default<Map<Either<ZswapCoinPublicKey, ContractAddress>, Uint<128>>>);
-        }
-        _balances.lookup(id).insert(disclose(to), disclose(newBalance));
-    }
-}
-```
-
-Transfer process:
-
-1. Verify caller is owner or approved operator
-2. Check sufficient balance for token ID
-3. Decrease sender's balance
-4. Increase receiver's balance (with overflow check)
-
-You can transfer partial amounts (10 gold coins) or single units (1 legendary sword).
-
-### Batch Operations Limitation
+**Batch Operations Limitation**:
 
 <Warning>
-**Compact Limitation**: Standard ERC1155 includes batch operations (`balanceOfBatch`, `safeBatchTransferFrom`) for gas efficiency. However, **Compact doesn't support dynamic arrays yet**, so batch operations are not possible.
-
-You must transfer tokens one at a time:
-
-```compact
-// ❌ Can't do this (no dynamic arrays):
-safeTransferFrom(from, to, [1, 2, 3], [100, 50, 10]);
-
-// ✅ Do this instead:
-safeTransferFrom(from, to, 1, 100);
-safeTransferFrom(from, to, 2, 50);
-safeTransferFrom(from, to, 3, 10);
-```
-
+  **Compact doesn't support dynamic arrays yet**, so standard ERC1155 batch
+  operations (`balanceOfBatch`, `safeBatchTransferFrom`) are not possible. Must
+  transfer one token ID at a time.
 </Warning>
 
-### Token Metadata
+**Metadata URIs**:
+
+- Each token ID has one URI describing that token **type** (not instance)
+- Example: All "Gold Coin" tokens (ID 1) share the same metadata
+- Unlike ERC721 where each token is unique with its own metadata
+
+For approval mechanics, see [Approval tutorial](/basics/approval) and [Allowance tutorial](/basics/allowance)  
+For minting/burning patterns, see [Minting tutorial](/basics/minting) and [Burning tutorial](/basics/burning)
+
+### Helper Functions
+
+The contract uses utility functions for address validation and operations:
 
 ```compact
-export ledger _uris: Map<Uint<128>, Opaque<"string">>;
-
-export circuit uri(tokenId: Uint<128>): Opaque<"string"> {
-    if (!_uris.member(disclose(tokenId))) {
-        return ""; // Empty string
-    }
-    return _uris.lookup(disclose(tokenId));
+circuit isKeyOrAddressZero(keyOrAddress: Either<ZswapCoinPublicKey, ContractAddress>): Boolean {
+    return isContractAddress(keyOrAddress)
+        ? default<ContractAddress> == keyOrAddress.right
+        : default<ZswapCoinPublicKey> == keyOrAddress.left;
 }
 
-export circuit _setURI(id: Uint<128>, newuri: Opaque<"string">): [] {
-    _uris.insert(disclose(id), disclose(newuri));
+circuit isContractAddress(keyOrAddress: Either<ZswapCoinPublicKey, ContractAddress>): Boolean {
+    return !keyOrAddress.is_left;
 }
-```
 
-Each token ID has its own metadata URI. Unlike ERC721 where each token is unique, ERC1155 URIs describe a **type** of token:
-
-```json
-{
-  "name": "Gold Coin",
-  "description": "Common currency in the game",
-  "image": "ipfs://QmX.../gold-coin.png",
-  "properties": {
-    "type": "Currency",
-    "rarity": "Common"
-  }
+circuit burnAddress(): Either<ZswapCoinPublicKey, ContractAddress> {
+    return left<ZswapCoinPublicKey, ContractAddress>(default<ZswapCoinPublicKey>);
 }
 ```
+
+- **isKeyOrAddressZero**: Validates addresses by checking against default values. Used to prevent minting/transferring to invalid addresses.
+- **isContractAddress**: Determines if an address is a ContractAddress type. Used to prevent unsafe transfers to contracts until contract-to-contract calls are supported.
+- **burnAddress**: Returns the burn address for minting (from burn) and burning (to burn) operations.
+
+<Note>
+  In production OpenZeppelin contracts, these utilities are imported from the
+  `Utils` module. The implementations shown here match the OpenZeppelin Compact
+  Contracts v0.0.1-alpha.0 specification.
+</Note>
 
 ## Try It Yourself
 

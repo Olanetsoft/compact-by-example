@@ -1,0 +1,372 @@
+---
+title: "Burning Tokens"
+sidebarTitle: "Burning"
+description: "Learn how to destroy tokens in Compact. Master burning operations, supply reduction, deflationary mechanics, and delegated burning patterns."
+"og:title": "Burning Tokens Tutorial - Compact Token Destruction"
+"og:description": "Master token burning for deflationary tokenomics and supply management"
+---
+
+<Info>
+  **What You'll Learn**: Burning tokens • Supply reduction • Self-burn •
+  Delegated burning • Deflationary patterns
+</Info>
+
+## Introduction
+
+Burning permanently destroys tokens, removing them from circulation. It's used for deflationary tokenomics, buyback-and-burn programs, stablecoins that need to decrease supply, or removing tokens from the economy.
+
+<Tip>
+  **Real-world use**: Deflationary tokens (burn fees), governance tokens (burn
+  for buybacks), stablecoins (burn to maintain peg), NFT destruction, or supply
+  reduction mechanisms.
+</Tip>
+
+## The Contract
+
+<Accordion title="View Contract Code">
+
+```compact
+pragma language_version >= 0.17.0;
+
+import CompactStandardLibrary;
+
+// Account balances
+export ledger balances: Map<Either<ZswapCoinPublicKey, ContractAddress>, Uint<128>>;
+
+// Total token supply
+export ledger totalSupply: Uint<128>;
+
+// Get total circulating supply
+export circuit getTotalSupply(): Uint<128> {
+    return totalSupply;
+}
+
+// Burn your own tokens
+export circuit burn(amount: Uint<128>): [] {
+    const account = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
+    _burn(account, amount);
+}
+
+// Burn tokens from another account (with approval)
+export circuit burnFrom(
+    account: Either<ZswapCoinPublicKey, ContractAddress>,
+    amount: Uint<128>
+): [] {
+    const spender = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
+
+    // Check and spend allowance (requires approval system)
+    _spendAllowance(account, spender, amount);
+
+    _burn(account, amount);
+}
+
+// Internal: Burn tokens
+circuit _burn(
+    account: Either<ZswapCoinPublicKey, ContractAddress>,
+    amount: Uint<128>
+): [] {
+    // Get current balance
+    const currentBalance = getBalance(account);
+
+    // Check sufficient balance
+    assert(currentBalance >= amount, "Burn amount exceeds balance");
+
+    // Decrease account balance
+    balances.insert(disclose(account), disclose(currentBalance - amount));
+
+    // Decrease total supply
+    totalSupply = disclose(totalSupply - amount);
+}
+
+// Helper: Get balance
+circuit getBalance(account: Either<ZswapCoinPublicKey, ContractAddress>): Uint<128> {
+    if (!balances.member(disclose(account))) {
+        return 0;
+    }
+    return balances.lookup(disclose(account));
+}
+
+// Helper: Spend allowance (simplified - see Approval tutorial for full implementation)
+circuit _spendAllowance(
+    owner: Either<ZswapCoinPublicKey, ContractAddress>,
+    spender: Either<ZswapCoinPublicKey, ContractAddress>,
+    amount: Uint<128>
+): [] {
+    // Check allowance and decrease it
+    // See Approval & Allowance tutorial for complete implementation
+}
+```
+
+</Accordion>
+
+## How It Works
+
+### Burning Process
+
+```compact
+circuit _burn(
+    account: Either<ZswapCoinPublicKey, ContractAddress>,
+    amount: Uint<128>
+): [] {
+    // Get current balance
+    const currentBalance = getBalance(account);
+
+    // Check sufficient balance
+    assert(currentBalance >= amount, "Burn amount exceeds balance");
+
+    // Decrease account balance
+    balances.insert(disclose(account), disclose(currentBalance - amount));
+
+    // Decrease total supply
+    totalSupply = disclose(totalSupply - amount);
+}
+```
+
+Burning flow:
+
+1. **Get current balance**: Check how many tokens account has
+2. **Check sufficient balance**: Ensure account has enough tokens to burn
+3. **Decrease account balance**: Remove tokens from account
+4. **Decrease total supply**: Remove tokens from circulation
+
+**Result**: Tokens are permanently destroyed and removed from total supply.
+
+<Tip>
+  **Order matters**: Decrease balance BEFORE total supply. If the balance check
+  fails, we haven't corrupted total supply yet. This makes errors safer.
+</Tip>
+
+### Burning Your Own Tokens
+
+```compact
+export circuit burn(amount: Uint<128>): [] {
+    const account = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
+    _burn(account, amount);
+}
+```
+
+Users can always burn their own tokens:
+
+- **`ownPublicKey()`**: Automatically gets caller's address
+- **Self-burn**: No approval needed to burn your own tokens
+- **Deflationary**: Reduces circulating supply permanently
+- **Voluntary**: Anyone can choose to burn their tokens
+
+### Delegated Burning
+
+```compact
+export circuit burnFrom(
+    account: Either<ZswapCoinPublicKey, ContractAddress>,
+    amount: Uint<128>
+): [] {
+    const spender = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
+
+    // Check allowance (requires approval system)
+    _spendAllowance(account, spender, amount);
+
+    _burn(account, amount);
+}
+```
+
+Burn someone else's tokens (with their approval):
+
+- **Requires approval**: Account must first approve the burner (see [Approval tutorial](/basics/approval))
+- **Useful for contracts**: Contracts that burn tokens as part of their logic
+- **Spends allowance**: Decreases the approved amount
+
+<Note>
+  **Use case**: A staking contract that burns tokens when users stake, or a
+  buyback contract that burns purchased tokens.
+</Note>
+
+## Deflationary Patterns
+
+### Burn on Transfer
+
+```compact
+export ledger burnRate: Uint<8>; // Percentage burned per transfer
+
+circuit _transfer(
+    from: Either<ZswapCoinPublicKey, ContractAddress>,
+    to: Either<ZswapCoinPublicKey, ContractAddress>,
+    amount: Uint<128>
+): [] {
+    // Calculate burn amount (e.g., 1% of transfer)
+    const burnAmount = (amount * burnRate as Uint<128>) / 100;
+    const transferAmount = amount - burnAmount;
+
+    // Burn the fee
+    _burn(from, burnAmount);
+
+    // Transfer the rest
+    const fromBalance = getBalance(from);
+    const toBalance = getBalance(to);
+
+    balances.insert(disclose(from), disclose(fromBalance - transferAmount));
+    balances.insert(disclose(to), disclose(toBalance + transferAmount));
+}
+```
+
+Some tokens burn a percentage of each transfer (deflationary pressure).
+
+**Example**: Transfer 100 tokens with 1% burn rate:
+
+- 1 token burned
+- 99 tokens transferred
+- Total supply decreases by 1
+
+### Buyback and Burn
+
+```compact
+export ledger treasury: Either<ZswapCoinPublicKey, ContractAddress>;
+
+export circuit buybackAndBurn(amount: Uint<128>): [] {
+    // Only treasury can execute
+    const caller = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
+    assert(caller == treasury, "Only treasury");
+
+    // Assume tokens were bought from market and sent to treasury
+    const treasuryBalance = getBalance(treasury);
+    assert(treasuryBalance >= amount, "Insufficient treasury balance");
+
+    // Burn them to reduce supply
+    _burn(treasury, amount);
+}
+```
+
+Projects buy tokens from market and burn them to reduce supply and increase value.
+
+### Time-Based Burning
+
+```compact
+export ledger lastBurn: Uint<64>;
+export ledger burnInterval: Uint<64>; // Seconds between burns
+
+export circuit scheduledBurn(): [] {
+    const timePassed = getCurrentTime() - lastBurn;
+
+    if (timePassed >= burnInterval) {
+        // Burn a percentage of total supply
+        const burnAmount = totalSupply / 100; // 1% of supply
+
+        const treasury = getTreasuryAddress();
+        _burn(treasury, burnAmount);
+
+        lastBurn = disclose(getCurrentTime());
+    }
+}
+```
+
+Automatic periodic burns to create predictable deflation.
+
+### Burn to Mint (Rebase)
+
+```compact
+export circuit rebase(): [] {
+    // Example: Burn old token, mint new token at different ratio
+    const holder = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
+    const oldBalance = getBalance(holder);
+
+    // Burn all old tokens
+    _burn(holder, oldBalance);
+
+    // Mint new tokens at 2:1 ratio
+    const newAmount = oldBalance * 2;
+    _mint(holder, newAmount);
+}
+```
+
+Some tokens implement rebasing by burning and re-minting.
+
+## Safety Considerations
+
+### Can't Burn More Than Balance
+
+```compact
+circuit _burn(
+    account: Either<ZswapCoinPublicKey, ContractAddress>,
+    amount: Uint<128>
+): [] {
+    const currentBalance = getBalance(account);
+
+    // This assert prevents burning more than owned
+    assert(currentBalance >= amount, "Burn amount exceeds balance");
+
+    // ... rest of burn logic
+}
+```
+
+The balance check prevents burning tokens that don't exist.
+
+### No Underflow Risk
+
+```compact
+// Safe: Check balance first
+assert(currentBalance >= amount, "Burn amount exceeds balance");
+balances.insert(disclose(account), disclose(currentBalance - amount));
+
+// Total supply decrease is also safe
+totalSupply = disclose(totalSupply - amount);
+```
+
+Since we verify `currentBalance >= amount`, the subtraction can't underflow.
+
+<Warning>
+  **Important**: Always check balance before burning. Never assume an account
+  has sufficient tokens.
+</Warning>
+
+## Try It Yourself
+
+<Accordion title="Build and Test">
+
+**1. Create project:**
+
+```bash
+mkdir token-burning && cd token-burning
+mkdir -p contracts
+```
+
+**2. Save the contract as `contracts/burning.compact`**
+
+**3. Test burning:**
+
+```compact
+circuit testBurning(): [] {
+    const alice = left<ZswapCoinPublicKey, ContractAddress>(/* alice's key */);
+
+    // Give Alice 1000 tokens
+    balances.insert(disclose(alice), 1000);
+    totalSupply = disclose(1000);
+
+    // Alice burns 200 tokens
+    _burn(alice, 200);
+    // Total supply: 800, Alice: 800
+
+    // Alice burns 300 more
+    _burn(alice, 300);
+    // Total supply: 500, Alice: 500
+
+    // Verify supply matches balance
+    assert(getBalance(alice) == totalSupply, "Supply mismatch!");
+}
+```
+
+**4. Compile:**
+
+```bash
+compact compile contracts/burning.compact contracts/managed/burning
+```
+
+</Accordion>
+
+## What's Next
+
+<CardGroup cols={2}>
+  <Card title="Minting Tokens" icon="plus" href="/basics/minting">
+    Learn how to create new tokens
+  </Card>
+  <Card title="ERC20 Token" icon="coins" href="/applications/erc20-token">
+    Complete token with burning
+  </Card>
+</CardGroup>
