@@ -1,37 +1,16 @@
 ---
 title: "Compact by Example"
 sidebarTitle: "Introduction"
-description: "Learn Midnight's Compact language through hands-on, interactive examples. Master zero-knowledge smart contracts, privacy-preserving DApps, and blockchain development with practical tutorials."
-"og:title": "Compact by Example - Master Midnight Network Development"
-"og:description": "Hands-on tutorial for learning Compact smart contract language. Build privacy-preserving applications on Midnight Network."
+description: "Code examples for Midnight's Compact smart contract language."
+"og:title": "Compact by Example"
+"og:description": "Code examples for Compact smart contracts on Midnight Network"
 ---
 
-## Welcome to Compact by Example
+## Compact by Example
 
-Master **[Midnight Network's](https://midnight.network)** smart contract development through practical, runnable code examples. Build privacy-preserving applications using zero-knowledge proofs on the Midnight blockchain.
+Compact code examples for **[Midnight Network](https://midnight.network)** smart contract development. Inspired by solidity-by-example.org.
 
-Inspired by the acclaimed "Solidity by Example," this resource is designed to help developers of all levels understand Compact's unique features and capabilities.
-
-## What is Compact?
-
-**Compact** is Midnight Network's smart contract programming language that enables you to write privacy-preserving decentralized applications. The Compact compiler outputs **zero-knowledge circuits** that prove the correctness of interactions with the blockchain ledger.
-
-### Key Concepts
-
-**Ledger State**: Smart contracts store data on-chain using `ledger` declarations. This state is publicly accessible but can contain commitments and hashes that preserve privacy.
-
-**Circuits**: The main functions of your contract. Exported circuits become entry points that users can call in transactions. All circuit computations are proven correct using zero-knowledge proofs.
-
-**Witnesses**: Functions that retrieve data from the user's local machine (like secret keys). Witness data is kept confidential and never revealed on-chain.
-
-**Privacy by Design**: Data not stored in ledger fields or returned from circuits remains confidential. Compact uses hashing and commitment schemes to enable proving correctness without revealing sensitive information.
-
-### What You Can Build
-
-- **Confidential Transactions**: Financial applications that hide transaction details while proving validity
-- **Private Voting Systems**: DAOs with confidential voting that prevents voter tracking
-- **Shielded Assets**: NFTs and tokens with private ownership and metadata
-- **Compliant Privacy**: Systems that prove regulatory compliance without exposing private data
+**Compact** is Midnight's smart contract language. It compiles to zero-knowledge circuits that prove correctness without revealing private data.
 
 ## Get Started
 
@@ -53,9 +32,7 @@ Inspired by the acclaimed "Solidity by Example," this resource is designed to he
 </Card>
 </Columns>
 
-## Community & Support
-
-Join the Midnight community to get help, share your projects, and stay updated:
+## Community
 
 <Columns cols={3}>
 <Card title="Official Docs" icon="book" href="https://docs.midnight.network">
@@ -110,15 +87,3 @@ Join the Midnight community to get help, share your projects, and stay updated:
   Technical deep dive into Midnight's architecture
 </Card>
 </Columns>
-
-<Tip>
-  **Pro Tip**: Use the search bar (⌘K or Ctrl+K) to quickly find specific
-  topics, functions, or concepts. All code examples and explanations are fully
-  searchable!
-</Tip>
-
-<Note>
-  **Disclaimer**: This is an educational resource maintained by the Midnight
-  community. For official documentation and production guidance, always refer to
-  [docs.midnight.network](https://docs.midnight.network).
-</Note>
