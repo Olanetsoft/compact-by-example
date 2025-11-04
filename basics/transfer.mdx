@@ -293,61 +293,6 @@ compact compile contracts/transfer.compact contracts/managed/transfer
 
 </Accordion>
 
-### Challenge: Add Transfer Limits
-
-<Accordion title="View Solution">
-
-Add per-transfer and daily limits for security:
-
-```compact
-// Daily transfer tracking
-export ledger dailyTransfers: Map<Either<ZswapCoinPublicKey, ContractAddress>, Uint<128>>;
-export ledger lastResetDay: Map<Either<ZswapCoinPublicKey, ContractAddress>, Uint<64>>;
-
-// Transfer with limits
-export circuit transferWithLimit(
-    to: Either<ZswapCoinPublicKey, ContractAddress>,
-    amount: Uint<128>
-): Boolean {
-    const from = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
-
-    // Per-transfer limit: 1000 tokens max
-    const PER_TRANSFER_LIMIT = 1000 as Uint<128>;
-    assert(amount <= PER_TRANSFER_LIMIT, "Exceeds per-transfer limit");
-
-    // Daily limit: 5000 tokens per day
-    const DAILY_LIMIT = 5000 as Uint<128>;
-    const currentDay = getCurrentDay(); // You'd implement this
-
-    // Reset counter if new day
-    if (!lastResetDay.member(disclose(from)) ||
-        lastResetDay.lookup(disclose(from)) != currentDay) {
-        dailyTransfers.insert(disclose(from), 0);
-        lastResetDay.insert(disclose(from), disclose(currentDay));
-    }
-
-    const todayTransferred = dailyTransfers.lookup(disclose(from));
-    assert(todayTransferred + amount <= DAILY_LIMIT, "Exceeds daily limit");
-
-    // Update daily counter
-    dailyTransfers.insert(disclose(from), disclose(todayTransferred + amount));
-
-    // Perform transfer
-    _transfer(from, to, amount);
-
-    return true;
-}
-
-circuit getCurrentDay(): Uint<64> {
-    // Implement based on block timestamp / height
-    return 0; // Placeholder
-}
-```
-
-This adds safety limits for high-value transfers.
-
-</Accordion>
-
 ## What's Next
 
 <CardGroup cols={2}>
