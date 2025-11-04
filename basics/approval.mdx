@@ -200,24 +200,6 @@ Two-level lookup:
   cause errors when looking up non-existent keys.
 </Warning>
 
-## Real-World Example
-
-### DEX Trading Flow
-
-```compact
-// Step 1: User approves DEX to spend tokens
-// Alice: approve(DEX_CONTRACT, 1000)
-const alice = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
-_approve(alice, DEX_CONTRACT, 1000);
-
-// Step 2: DEX can now transfer Alice's tokens
-// (Called by DEX contract in transferFrom - see Allowance tutorial)
-const allowed = allowance(alice, DEX_CONTRACT); // Returns 1000
-
-// Step 3: After trade, allowance is reduced
-// (See Allowance tutorial for spending allowance)
-```
-
 ## Try It Yourself
 
 <Accordion title="Build and Test">
