@@ -413,61 +413,6 @@ compact compile contracts/approval.compact contracts/managed/approval
 
 </Accordion>
 
-### Challenge: Add Approval Events
-
-<Accordion title="View Solution">
-
-Track approval history for transparency:
-
-```compact
-// Approval history tracking
-export ledger approvalHistory: Map<
-    Either<ZswapCoinPublicKey, ContractAddress>,
-    Opaque<"array<ApprovalRecord>">
->;
-
-struct ApprovalRecord {
-    spender: Either<ZswapCoinPublicKey, ContractAddress>,
-    amount: Uint<128>,
-    timestamp: Uint<64>
-}
-
-circuit _approve(
-    owner: Either<ZswapCoinPublicKey, ContractAddress>,
-    spender: Either<ZswapCoinPublicKey, ContractAddress>,
-    amount: Uint<128>
-): [] {
-    assert(!isZeroAddress(owner), "Approve from zero address");
-    assert(!isZeroAddress(spender), "Approve to zero address");
-
-    // Set allowance
-    if (!allowances.member(disclose(owner))) {
-        allowances.insert(
-            disclose(owner),
-            default<Map<Either<ZswapCoinPublicKey, ContractAddress>, Uint<128>>>
-        );
-    }
-    allowances.lookup(owner).insert(disclose(spender), disclose(amount));
-
-    // Log approval (for audit trail)
-    logApproval(owner, spender, amount);
-}
-
-circuit logApproval(
-    owner: Either<ZswapCoinPublicKey, ContractAddress>,
-    spender: Either<ZswapCoinPublicKey, ContractAddress>,
-    amount: Uint<128>
-): [] {
-    // Add to approval history
-    // (Implementation depends on array handling)
-    // This provides an audit trail of all approvals
-}
-```
-
-Useful for security audits and debugging.
-
-</Accordion>
-
 ## What's Next
 
 <CardGroup cols={2}>

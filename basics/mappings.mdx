@@ -268,42 +268,6 @@ compact compile contracts/balances.compact contracts/managed/balances
 
 </Accordion>
 
-### Challenge: Add a Transfer Function
-
-<Accordion title="View Solution">
-
-Combine read and write operations to transfer balances:
-
-```compact
-export circuit transfer(
-    from: Either<ZswapCoinPublicKey, ContractAddress>,
-    to: Either<ZswapCoinPublicKey, ContractAddress>,
-    amount: Uint<128>
-): [] {
-    // Check authorization (caller must be 'from')
-    const caller = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
-    assert(caller == from, "Not authorized");
-
-    // Check sufficient balance
-    const fromBalance = getBalance(from);
-    assert(fromBalance >= amount, "Insufficient balance");
-
-    const toBalance = getBalance(to);
-
-    // Check overflow for receiver
-    const MAX_UINT128 = 340282366920938463463374607431768211455 as Uint<128>;
-    assert(toBalance <= MAX_UINT128 - amount, "Balance overflow");
-
-    // Update balances
-    subtractBalance(from, amount);
-    addBalance(to, amount);
-}
-```
-
-This transfer function is the foundation of token contracts!
-
-</Accordion>
-
 ## What's Next
 
 <CardGroup cols={2}>

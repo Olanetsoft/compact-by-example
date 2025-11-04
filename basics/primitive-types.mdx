@@ -213,51 +213,6 @@ Check `contracts/managed/types/contract/index.d.ts` to see how Compact types map
 
 </Accordion>
 
-### Challenge: Type Conversions
-
-<Accordion title="View Solution">
-
-Compact supports type casts between compatible types using the `as` keyword:
-
-```compact
-pragma language_version 0.16;
-
-import CompactStandardLibrary;
-
-export circuit convertTypes(): [] {
-  // Upcasting (subtype to supertype) - always safe
-  const small: Uint<0..100> = 50;
-  const large: Uint<0..1000> = small as Uint<0..1000>; // Static cast
-
-  // Field conversion - always safe for Uint
-  const fieldValue: Field = small as Field;
-
-  // Downcasting - checked at runtime
-  const big: Uint<0..500> = 400;
-  const tiny: Uint<0..255> = big as Uint<0..255>; // Runtime check (passes)
-  // const invalid: Uint<0..255> = 300 as Uint<0..255>; // Runtime error!
-
-  // Boolean conversions
-  const zero: Field = 0;
-  const nonZero: Field = 42;
-  const isFalse: Boolean = zero as Boolean;     // false
-  const isTrue: Boolean = nonZero as Boolean;   // true
-
-  // Bytes to Field
-  const bytes: Bytes<8> = "12345678";
-  const fromBytes: Field = bytes as Field; // Interprets bytes as field element
-}
-```
-
-**Type cast rules**:
-
-- `Uint<0..m>` to `Uint<0..n>`: static if `m ≤ n`, checked if `m > n`
-- `Uint` to `Field`: always static (safe)
-- `Field` to `Boolean`: `0` → `false`, anything else → `true`
-- `Bytes<m>` to `Field`: interprets bytes as field element (checked for field overflow)
-
-</Accordion>
-
 ## What's Next
 
 <CardGroup cols={2}>
