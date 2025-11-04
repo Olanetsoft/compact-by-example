@@ -200,53 +200,6 @@ Two-level lookup:
   cause errors when looking up non-existent keys.
 </Warning>
 
-## Try It Yourself
-
-<Accordion title="Build and Test">
-
-**1. Create project:**
-
-```bash
-mkdir token-approval && cd token-approval
-mkdir -p contracts
-```
-
-**2. Save the contract as `contracts/approval.compact`**
-
-**3. Test the approval flow:**
-
-```compact
-circuit testApprovals(): [] {
-    const alice = left<ZswapCoinPublicKey, ContractAddress>(/* alice's key */);
-    const bob = left<ZswapCoinPublicKey, ContractAddress>(/* bob's key */);
-    const dex = left<ZswapCoinPublicKey, ContractAddress>(/* dex contract */);
-
-    // Give Alice 1000 tokens
-    balances.insert(disclose(alice), 1000);
-
-    // Alice approves DEX to spend 500 tokens
-    _approve(alice, dex, 500);
-
-    // Check allowance
-    const allowed = allowance(alice, dex);
-    assert(allowed == 500, "Allowance mismatch!");
-
-    // Alice also approves Bob to spend 50 tokens
-    _approve(alice, bob, 50);
-
-    // Both approvals are independent
-    assert(allowance(alice, dex) == 500, "DEX allowance changed!");
-    assert(allowance(alice, bob) == 50, "Bob allowance wrong!");
-}
-```
-
-**4. Compile:**
-
-```bash
-compact compile contracts/approval.compact contracts/managed/approval
-```
-
-</Accordion>
 
 ## What's Next
 

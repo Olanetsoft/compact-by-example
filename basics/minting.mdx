@@ -140,52 +140,6 @@ The example `mint()` function has NO access control - anyone can mint unlimited 
 
 See [Access Control](/basics/access-control) for owner-only and role-based patterns.
 
-## Try It Yourself
-
-<Accordion title="Build and Test">
-
-**1. Create project:**
-
-```bash
-mkdir token-minting && cd token-minting
-mkdir -p contracts
-```
-
-**2. Save the contract as `contracts/minting.compact`**
-
-**3. Test minting:**
-
-```compact
-circuit testMinting(): [] {
-    const alice = left<ZswapCoinPublicKey, ContractAddress>(/* alice's key */);
-    const bob = left<ZswapCoinPublicKey, ContractAddress>(/* bob's key */);
-
-    // Mint 1000 tokens to Alice
-    _mint(alice, 1000);
-    // Total supply: 1000, Alice: 1000
-
-    // Mint 500 tokens to Bob
-    _mint(bob, 500);
-    // Total supply: 1500, Bob: 500
-
-    // Mint more to Alice
-    _mint(alice, 300);
-    // Total supply: 1800, Alice: 1300
-
-    // Verify supply matches sum of balances
-    const sum = getBalance(alice) + getBalance(bob);
-    assert(sum == totalSupply, "Supply mismatch!");
-}
-```
-
-**4. Compile:**
-
-```bash
-compact compile contracts/minting.compact contracts/managed/minting
-```
-
-</Accordion>
-
 ## What's Next
 
 <CardGroup cols={2}>

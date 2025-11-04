@@ -159,50 +159,6 @@ Burn someone else's tokens (with their approval):
   buyback contract that burns purchased tokens.
 </Note>
 
-## Try It Yourself
-
-<Accordion title="Build and Test">
-
-**1. Create project:**
-
-```bash
-mkdir token-burning && cd token-burning
-mkdir -p contracts
-```
-
-**2. Save the contract as `contracts/burning.compact`**
-
-**3. Test burning:**
-
-```compact
-circuit testBurning(): [] {
-    const alice = left<ZswapCoinPublicKey, ContractAddress>(/* alice's key */);
-
-    // Give Alice 1000 tokens
-    balances.insert(disclose(alice), 1000);
-    totalSupply = disclose(1000);
-
-    // Alice burns 200 tokens
-    _burn(alice, 200);
-    // Total supply: 800, Alice: 800
-
-    // Alice burns 300 more
-    _burn(alice, 300);
-    // Total supply: 500, Alice: 500
-
-    // Verify supply matches balance
-    assert(getBalance(alice) == totalSupply, "Supply mismatch!");
-}
-```
-
-**4. Compile:**
-
-```bash
-compact compile contracts/burning.compact contracts/managed/burning
-```
-
-</Accordion>
-
 ## What's Next
 
 <CardGroup cols={2}>

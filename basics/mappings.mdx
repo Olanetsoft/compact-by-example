@@ -164,51 +164,6 @@ Maps can contain other Maps for complex relationships (used in approval systems)
 
 Compact doesn't support iterating over Map keys directly. Track keys separately if needed.
 
-## Try It Yourself
-
-<Accordion title="Build and Test">
-
-**1. Create project:**
-
-```bash
-mkdir balance-tracker && cd balance-tracker
-mkdir -p contracts
-```
-
-**2. Save the contract as `contracts/balances.compact`**
-
-**3. Add a getter for your own balance:**
-
-```compact
-export circuit getMyBalance(): Uint<128> {
-    const me = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
-    return getBalance(me);
-}
-```
-
-**4. Test the contract:**
-
-```compact
-// In constructor or init function
-circuit constructor(): [] {
-    const alice = left<ZswapCoinPublicKey, ContractAddress>(/* alice's key */);
-    const bob = left<ZswapCoinPublicKey, ContractAddress>(/* bob's key */);
-
-    setBalance(alice, 1000);
-    setBalance(bob, 500);
-
-    addBalance(alice, 100); // Alice now has 1100
-    subtractBalance(bob, 50); // Bob now has 450
-}
-```
-
-**5. Compile:**
-
-```bash
-compact compile contracts/balances.compact contracts/managed/balances
-```
-
-</Accordion>
 
 ## What's Next
 
