@@ -1,24 +1,12 @@
 ---
 title: "Hello World"
 sidebarTitle: "Hello World"
-description: "Build your first Compact smart contract for Midnight Network. Learn ledger state, circuits, witnesses, and how to store and retrieve messages on-chain with zero-knowledge proofs."
-"og:title": "Hello World Compact Contract - Midnight Network Tutorial"
-"og:description": "Step-by-step tutorial for creating your first Compact smart contract with ledger state and zero-knowledge circuits"
+description: "Store and retrieve messages on-chain."
+"og:title": "Hello World - Compact by Example"
+"og:description": "Your first Compact smart contract with ledger state and circuits"
 ---
 
-<Info>
-  **What You'll Learn**: Pragma directives • Ledger declarations • Circuits •
-  The `disclose()` function • Opaque types
-</Info>
-
-## Introduction
-
-Every developer's journey starts with "Hello World!" This contract stores a string message on the Midnight blockchain and allows anyone to update it. While simple, it demonstrates the fundamental structure of every Compact smart contract.
-
-<Tip>
-  **Real-world use**: Public announcements, bulletin boards, or any system where
-  messages need to be stored on-chain.
-</Tip>
+Store a string message on the blockchain and allow anyone to update it.
 
 ## The Contract
 
@@ -53,11 +41,7 @@ export circuit getMessage(): Opaque<"string"> {
 pragma language_version 0.16;
 ```
 
-Every Compact contract starts with a pragma directive specifying the compiler version. This ensures your contract behaves predictably and prevents issues with future compiler changes.
-
-<Note>
-**Best Practice**: Use exact versions (`0.16`) for production contracts, not ranges like `>= 0.16 && <= 0.17`.
-</Note>
+Specifies the compiler version.
 
 ### Import Statement
 
@@ -65,7 +49,7 @@ Every Compact contract starts with a pragma directive specifying the compiler ve
 import CompactStandardLibrary;
 ```
 
-This import provides essential types (`Opaque<T>`, `Bytes<N>`, `Uint<N>`) and functions (`disclose()`, `persistentHash()`) needed for Compact contracts.
+Provides essential types and functions.
 
 ### Ledger Declaration
 
@@ -73,9 +57,7 @@ This import provides essential types (`Opaque<T>`, `Bytes<N>`, `Uint<N>`) and fu
 export ledger message: Opaque<"string">;
 ```
 
-The `ledger` keyword declares on-chain state variables. Think of it like a database schema - this reserves permanent storage on the blockchain. The `export` keyword makes this variable accessible from your DApp.
-
-**Opaque Types**: `Opaque<"string">` stores variable-length strings while maintaining Midnight's privacy guarantees. Other types include `Bytes<N>`, `Uint<N>`, and custom structs.
+Declares on-chain state. `Opaque<"string">` stores variable-length strings.
 
 ### Circuits (Functions)
 
@@ -85,9 +67,7 @@ export circuit storeMessage(customMessage: Opaque<"string">): [] {
 }
 ```
 
-Circuits are Compact's functions. They're compiled into zero-knowledge proofs that guarantee computational correctness. The `export` keyword makes this circuit callable from external applications.
-
-**Return type**: `[]` means this circuit returns nothing (like `void` in other languages).
+Circuits are functions callable from external applications. `[]` means returns nothing.
 
 ### The disclose() Function
 
@@ -95,13 +75,7 @@ Circuits are Compact's functions. They're compiled into zero-knowledge proofs th
 disclose(message = customMessage);
 ```
 
-<Warning>
-  **Privacy by Default**: Compact treats all data as private unless explicitly
-  disclosed. You must use `disclose()` when assigning user input to ledger
-  variables, signaling that this data is intentionally public.
-</Warning>
-
-Without `disclose()`, the compiler will reject the assignment - this prevents accidental data leaks.
+Use `disclose()` when assigning user input to ledger variables to make data public.
 
 ## Try It Yourself
 
