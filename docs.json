@@ -26,13 +26,6 @@
       "chatgpt",
       "claude",
       {
-        "title": "Midnight Discord",
-        "description": "Join our community and get help",
-        "icon": "discord",
-        "iconType": "brands",
-        "href": "https://discord.com/invite/midnightnetwork"
-      },
-      {
         "title": "Suggest Edit",
         "description": "Improve this page on GitHub",
         "icon": "github",
@@ -91,8 +84,8 @@
     "github": "https://github.com/Olanetsoft/compact-by-example",
     "x": "https://x.com/MidnightNtwrk",
     "discord": "https://discord.com/invite/midnightnetwork",
-    "linkedin": "https://www.linkedin.com/company/midnight-network",
-    "youtube": "https://www.youtube.com/@Midnight_Network_Official"
+    "linkedin": "https://www.linkedin.com/showcase/midnight-ntwrk/",
+    "youtube": "https://www.youtube.com/channel/UCy3oZ64F3FOtjZ5sZGQNgkA"
   },
   "feedback": {
     "suggestEdit": true,
