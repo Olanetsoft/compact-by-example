@@ -1,6 +1,6 @@
 # Compact by Example
 
-Learn Midnight's Compact language through practical examples. This project extends the Midnight Network with additional developer tooling.
+Learn Midnight's Compact language through practical examples. This project is built on the Midnight Network.
 
 Visit [https://compact-by-example.org](https://compact-by-example.org). Inspired by [Solidity by Example](https://solidity-by-example.org/).
 
