@@ -2,9 +2,7 @@
 
 Learn Midnight's Compact language through practical examples. This project extends the Midnight Network with additional developer tooling.
 
-Visit [https://compact-by-example.org](https://compact-by-example.org)
-
-Inspired by [Solidity by Example](https://solidity-by-example.org/).
+Visit [https://compact-by-example.org](https://compact-by-example.org). Inspired by [Solidity by Example](https://solidity-by-example.org/).
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
