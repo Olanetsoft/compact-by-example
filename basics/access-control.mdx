@@ -1,47 +1,76 @@
 ---
 title: "Access Control"
 sidebarTitle: "Access Control"
-description: "Restrict function access to authorized accounts."
+description: "Restrict circuit access using witness-derived keypairs."
 "og:title": "Access Control - Compact by Example"
-"og:description": "Owner and role-based access control patterns for smart contracts"
+"og:description": "Witness-derived keypair authorization for Compact smart contracts"
 "twitter:card": "summary_large_image"
 "twitter:title": "Access Control - Compact by Example"
-"twitter:description": "Owner and role-based access control patterns for smart contracts"
----le: "Access Control"
-sidebarTitle: "Access Control"
-description: "Restrict function access to authorized accounts."
-"og:title": "Access Control - Compact by Example"
-"og:description": "Owner-only and role-based access control patterns"
+"twitter:description": "Witness-derived keypair authorization for Compact smart contracts"
 ---
+
+<Warning>
+  **Security warning — `ownPublicKey()` does not authorize the caller.**
+
+  `ownPublicKey()` returns a value the prover knows, not a proof of key
+  ownership. Any value stored on the public ledger can be replayed by anyone
+  reading the chain. Do not use `ownPublicKey()` for authorization checks
+  (`assert(ownPublicKey() == storedAdmin)`). Use it only as an identifier for
+  the operation's target (e.g. "mint to this caller"). For authorization, see
+  [Owner-Only Pattern](#owner-only-pattern) below.
+</Warning>
 
 ## The Pattern
 
 <Accordion title="View Code">
 
 ```compact
-pragma language_version >= 0.17.0;
+pragma language_version >= 0.22.0;
 
 import CompactStandardLibrary;
 
-// Store contract owner
-export ledger owner: Either<ZswapCoinPublicKey, ContractAddress>;
+struct AdminSecretKey { bytes: Bytes<32>; }
+struct AdminPublicKey { bytes: Bytes<32>; }
 
-// Initialize owner in constructor
-circuit constructor(): [] {
-    owner = disclose(left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey()));
+// The ledger stores only the derived public key (a hash of the secret),
+// never the secret itself.
+export ledger contractAdmin: AdminPublicKey;
+
+// The deployer's DApp generates this secret and keeps it in private state.
+witness getAdminSecret(): AdminSecretKey;
+
+constructor() {
+    contractAdmin = disclose(deriveAdminPublicKey(getAdminSecret()));
 }
 
-// Owner-only function
-export circuit restrictedFunction(): [] {
-    const caller = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
-    assert(caller == owner, "Only owner can call");
-
-    // Protected logic here
+export circuit deriveAdminPublicKey(sk: AdminSecretKey): AdminPublicKey {
+    return AdminPublicKey {
+        bytes: persistentHash<Vector<2, Bytes<32>>>([
+            pad(32, "myapp:admin:pk:v1"),
+            sk.bytes
+        ])
+    };
 }
 
-// Get caller address
-export circuit getCaller(): Either<ZswapCoinPublicKey, ContractAddress> {
-    return left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
+export circuit privilegedAction(): [] {
+    // To pass, the caller must supply a witness `sk` such that
+    // H("myapp:admin:pk:v1" || sk) == contractAdmin.
+    assert(
+        contractAdmin == deriveAdminPublicKey(getAdminSecret()),
+        "Not authorized."
+    );
+    // ... privileged logic
+}
+
+// Rotate the admin key without ever transmitting a private key.
+// The new admin generates their secret locally and shares only the
+// derived public key with the current admin.
+export circuit rotateAdmin(newAdmin: AdminPublicKey): [] {
+    assert(
+        contractAdmin == deriveAdminPublicKey(getAdminSecret()),
+        "Not authorized to rotate admin."
+    );
+    contractAdmin = disclose(newAdmin);
 }
 ```
 
@@ -49,122 +78,189 @@ export circuit getCaller(): Either<ZswapCoinPublicKey, ContractAddress> {
 
 ## Owner-Only Pattern
 
-### Set Owner in Constructor
+The contract stores `H(domain || secret)` on the ledger, never the secret
+itself. The admin's DApp holds the secret in private state and re-derives
+the public key on every call. The on-chain value gives an attacker only the
+hash; hash preimage resistance means they cannot forge a matching secret.
+
+### Store the Admin Public Key
 
 ```compact
-export ledger owner: Either<ZswapCoinPublicKey, ContractAddress>;
+struct AdminSecretKey { bytes: Bytes<32>; }
+struct AdminPublicKey { bytes: Bytes<32>; }
 
-circuit constructor(): [] {
-    owner = disclose(left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey()));
+export ledger contractAdmin: AdminPublicKey;
+
+witness getAdminSecret(): AdminSecretKey;
+
+constructor() {
+    contractAdmin = disclose(deriveAdminPublicKey(getAdminSecret()));
+}
+
+export circuit deriveAdminPublicKey(sk: AdminSecretKey): AdminPublicKey {
+    return AdminPublicKey {
+        bytes: persistentHash<Vector<2, Bytes<32>>>([
+            pad(32, "myapp:admin:pk:v1"),
+            sk.bytes
+        ])
+    };
 }
 ```
 
-The deployer automatically becomes the owner.
+The domain string `"myapp:admin:pk:v1"` binds the public key to this
+contract. The same secret will not derive the same public key under a
+different domain, so an admin key cannot be replayed across contracts.
 
-### Restrict Function Access
+### Authorization Check
 
 ```compact
-export circuit mint(
-    account: Either<ZswapCoinPublicKey, ContractAddress>,
-    amount: Uint<128>
-): [] {
-    // Only owner can mint
-    const caller = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
-    assert(caller == owner, "Only owner can mint");
-
-    _mint(account, amount);
+export circuit privilegedAction(): [] {
+    assert(
+        contractAdmin == deriveAdminPublicKey(getAdminSecret()),
+        "Not authorized."
+    );
+    // ... privileged logic
 }
 ```
 
-Check caller matches owner before executing.
+The assertion succeeds only if the caller knows a secret whose hash matches
+the stored value. Reading `contractAdmin` off-chain gives an attacker the
+hash, not the preimage.
 
-### Transfer Ownership
+### Rotate the Admin
 
 ```compact
-export circuit transferOwnership(
-    newOwner: Either<ZswapCoinPublicKey, ContractAddress>
-): [] {
-    const caller = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
-    assert(caller == owner, "Only owner can transfer");
-
-    owner = disclose(newOwner);
+export circuit rotateAdmin(newAdmin: AdminPublicKey): [] {
+    assert(
+        contractAdmin == deriveAdminPublicKey(getAdminSecret()),
+        "Not authorized to rotate admin."
+    );
+    contractAdmin = disclose(newAdmin);
 }
 ```
 
-Allow current owner to transfer to new owner.
+The new admin generates their secret locally and shares only the derived
+public key with the current admin. Private keys never leave the holder's
+DApp.
 
-## Caller Identification
+## Why This Works
 
-### Get Caller Address
+The ledger stores `H(domain || secret)` — the hash of the admin's secret.
+To pass the assertion, the caller must provide a witness `sk` such that
+`H(domain || sk)` equals the stored value. The on-chain value is a hash,
+not the secret itself, so reading the ledger gives an attacker nothing they
+can replay. The domain string prevents the same secret from being valid
+across different contracts.
+
+This is what Solidity gets implicitly from `msg.sender` and EVM signature
+verification. In Compact, you construct the check yourself.
+
+## Anti-Pattern: ownPublicKey() as Authorization
+
+<Warning>
+  **Do not use this pattern.** It is shown only to document what fails.
+</Warning>
 
 ```compact
-// In any circuit
-const caller = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
-```
+// DO NOT USE — this is broken
+export ledger admin: ZswapCoinPublicKey;
 
-`ownPublicKey()` returns the public key of whoever called the circuit.
+constructor() {
+    admin = disclose(ownPublicKey());
+}
 
-### Authorize Sender
-
-```compact
-export circuit transfer(
-    to: Either<ZswapCoinPublicKey, ContractAddress>,
-    amount: Uint<128>
-): [] {
-    // Sender is always the caller
-    const from = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
-
-    // Transfer from caller's balance
-    _transfer(from, to, amount);
+export circuit privileged(): [] {
+    assert(ownPublicKey() == admin, "Only admin.");
 }
 ```
 
-The caller is automatically authorized to spend their own tokens.
+`ownPublicKey()` returns whatever value the prover claims to know. An
+attacker reads `admin` from the public ledger, supplies it as their own
+`ownPublicKey()`, and produces a mathematically valid proof. The proof
+correctly demonstrates "the prover knows a value equal to `admin`" — which
+anyone watching the chain does. The check provides no authorization.
+
+## When to Use ownPublicKey()
+
+`ownPublicKey()` is the correct primitive when you need a stable identifier
+for the caller as the **target** of an operation:
+
+- "Mint a token to this caller": `mint(ownPublicKey(), tokenId)`
+- "Credit this caller's balance": `balances.insert(ownPublicKey(), ...)`
+- "Record this caller as the recipient": `recipient = disclose(ownPublicKey())`
+
+It identifies who the operation is for. It does not prove who is allowed
+to perform it. The moment you write `assert(ownPublicKey() == ...)`, you
+have crossed into authorization, and the pattern breaks.
 
 ## Role-Based Access
 
-### Multiple Roles
+Multiple roles use the same keypair pattern with one ledger slot per role
+and a single witness that returns the caller's secret.
 
 ```compact
-export ledger owner: Either<ZswapCoinPublicKey, ContractAddress>;
-export ledger minter: Either<ZswapCoinPublicKey, ContractAddress>;
-export ledger burner: Either<ZswapCoinPublicKey, ContractAddress>;
+struct SecretKey { bytes: Bytes<32>; }
+struct PublicKey { bytes: Bytes<32>; }
 
-// Owner can mint and burn
-export circuit mint(account: Either<ZswapCoinPublicKey, ContractAddress>, amount: Uint<128>): [] {
-    const caller = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
-    assert(caller == owner || caller == minter, "Not authorized to mint");
-    _mint(account, amount);
+export ledger contractOwner: PublicKey;
+export ledger contractMinter: PublicKey;
+
+witness getCallerSecret(): SecretKey;
+
+constructor(initialMinter: PublicKey) {
+    contractOwner = disclose(derivePublicKey(getCallerSecret()));
+    contractMinter = disclose(initialMinter);
 }
 
-export circuit burn(amount: Uint<128>): [] {
-    const caller = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
-    assert(caller == owner || caller == burner, "Not authorized to burn");
-    _burn(caller, amount);
+export circuit derivePublicKey(sk: SecretKey): PublicKey {
+    return PublicKey {
+        bytes: persistentHash<Vector<2, Bytes<32>>>([
+            pad(32, "myapp:role:v1"),
+            sk.bytes
+        ])
+    };
+}
+
+// Owner-only: rotate the minter slot
+export circuit setMinter(newMinter: PublicKey): [] {
+    assert(
+        contractOwner == derivePublicKey(getCallerSecret()),
+        "Only owner can set minter."
+    );
+    contractMinter = disclose(newMinter);
+}
+
+// Either role may call this
+export circuit mintingAction(): [] {
+    const callerKey = disclose(derivePublicKey(getCallerSecret()));
+    assert(
+        callerKey == contractOwner || callerKey == contractMinter,
+        "Not authorized to mint."
+    );
+    // ... minting logic
 }
 ```
 
-Different roles for different operations.
+The `||` check would reveal which role matched, so `callerKey` is disclosed
+explicitly. That is safe: a derived public key equals the on-chain value
+only when the caller is already authorized, and the on-chain value is
+public anyway.
 
-### Admin Functions
+## Alternative Patterns
 
-```compact
-export circuit setMinter(newMinter: Either<ZswapCoinPublicKey, ContractAddress>): [] {
-    const caller = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
-    assert(caller == owner, "Only owner");
+The keypair pattern above covers single-admin and role-based authorization.
+For other situations:
 
-    minter = disclose(newMinter);
-}
+- **Signature verification against a stored verifying key** — when you need
+  multi-sig, cold-key signing, or cross-contract authority. The contract
+  stores a verifying key; privileged circuits accept a signature over the
+  operation as a parameter.
+- **Commitment / nullifier patterns** — when you need anonymous user
+  authorization with unlinkability across actions (anonymous voting,
+  single-use credentials). The contract stores commitments and tracks
+  nullifiers.
 
-export circuit setBurner(newBurner: Either<ZswapCoinPublicKey, ContractAddress>): [] {
-    const caller = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
-    assert(caller == owner, "Only owner");
-
-    burner = disclose(newBurner);
-}
-```
-
-Owner manages role assignments.
+Both are documented elsewhere.
 
 ## What's Next
 
@@ -173,6 +269,6 @@ Owner manages role assignments.
     Apply access control to minting
   </Card>
   <Card title="ERC20 Token" icon="coins" href="/applications/erc20-token">
-    See access control in complete token
+    See access control in a complete token
   </Card>
 </CardGroup>
