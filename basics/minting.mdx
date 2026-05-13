@@ -1,70 +1,102 @@
 ---
 title: "Minting Tokens"
 sidebarTitle: "Minting"
-description: "Create new tokens and increase total supply."
+description: "Create new tokens and increase total supply, gated by admin authentication."
 "og:title": "Minting Tokens - Compact by Example"
-"og:description": "Create tokens with overflow protection and supply management"
+"og:description": "Create tokens with overflow protection, admin auth, and supply management"
 "twitter:card": "summary_large_image"
 "twitter:title": "Minting Tokens - Compact by Example"
-"twitter:description": "Create tokens with overflow protection and supply management"
+"twitter:description": "Create tokens with overflow protection, admin auth, and supply management"
 ---
+
+<Warning>
+  Mint authority is gated by the witness-derived admin keypair from
+  [Access Control](/basics/access-control). The admin proves knowledge of a
+  witness secret whose hash matches the stored `_admin` public key.
+</Warning>
 
 ## The Contract
 
 <Accordion title="View Contract Code">
 
 ```compact
-pragma language_version >= 0.17.0;
+pragma language_version >= 0.23;
 
 import CompactStandardLibrary;
 
-// Account balances
-export ledger balances: Map<Either<ZswapCoinPublicKey, ContractAddress>, Uint<128>>;
+// Admin keypair (witness-derived)
+struct AdminSecretKey { bytes: Bytes<32>; }
+struct AdminPublicKey { bytes: Bytes<32>; }
+witness getAdminSecret(): AdminSecretKey;
 
-// Total token supply
-export ledger totalSupply: Uint<128>;
+// User keypair (witness-derived) — used as a balance index
+struct UserSecretKey { bytes: Bytes<32>; }
+struct UserPublicKey { bytes: Bytes<32>; }
+witness getUserSecret(): UserSecretKey;
 
-// Get total circulating supply
-export circuit getTotalSupply(): Uint<128> {
-    return totalSupply;
+// Ledger state
+export ledger _admin: AdminPublicKey;
+export ledger _balances: Map<UserPublicKey, Uint<128>>;
+export ledger _totalSupply: Uint<128>;
+
+constructor(initialAdmin: AdminPublicKey) {
+    _admin = disclose(initialAdmin);
 }
 
-// Mint new tokens
-export circuit mint(
-    account: Either<ZswapCoinPublicKey, ContractAddress>,
-    amount: Uint<128>
-): [] {
+// Key derivation
+export circuit deriveAdminPublicKey(sk: AdminSecretKey): AdminPublicKey {
+    return AdminPublicKey {
+        bytes: persistentHash<Vector<2, Bytes<32>>>([
+            pad(32, "myapp:admin:v1"),
+            sk.bytes
+        ])
+    };
+}
+
+export circuit deriveUserPublicKey(sk: UserSecretKey): UserPublicKey {
+    return UserPublicKey {
+        bytes: persistentHash<Vector<2, Bytes<32>>>([
+            pad(32, "myapp:user:v1"),
+            sk.bytes
+        ])
+    };
+}
+
+// Read total supply
+export circuit getTotalSupply(): Uint<128> {
+    return _totalSupply;
+}
+
+// Mint — admin only
+export circuit mint(account: UserPublicKey, amount: Uint<128>): [] {
+    assert(
+        _admin == deriveAdminPublicKey(getAdminSecret()),
+        "Only admin may mint"
+    );
     _mint(account, amount);
 }
 
-// Internal: Mint tokens
-circuit _mint(
-    account: Either<ZswapCoinPublicKey, ContractAddress>,
-    amount: Uint<128>
-): [] {
+// Internal mint logic
+circuit _mint(account: UserPublicKey, amount: Uint<128>): [] {
+    const MAX_UINT128: Uint<128> = 340282366920938463463374607431768211455 as Uint<128>;
+
     // Check total supply won't overflow
-    const MAX_UINT128 = 340282366920938463463374607431768211455 as Uint<128>;
-    assert(totalSupply <= MAX_UINT128 - amount, "Total supply overflow");
+    assert(_totalSupply <= MAX_UINT128 - amount, "Total supply overflow");
+    _totalSupply = disclose((_totalSupply + amount) as Uint<128>);
 
-    // Update total supply
-    totalSupply = disclose(totalSupply + amount);
-
-    // Get current balance
+    // Check recipient's balance won't overflow
     const currentBalance = getBalance(account);
-
-    // Check account balance won't overflow
     assert(currentBalance <= MAX_UINT128 - amount, "Balance overflow");
-
-    // Increase account balance
-    balances.insert(disclose(account), disclose(currentBalance + amount));
+    _balances.insert(
+        disclose(account),
+        disclose((currentBalance + amount) as Uint<128>)
+    );
 }
 
-// Helper: Get balance
-circuit getBalance(account: Either<ZswapCoinPublicKey, ContractAddress>): Uint<128> {
-    if (!balances.member(disclose(account))) {
-        return 0;
-    }
-    return balances.lookup(disclose(account));
+// Helper
+circuit getBalance(account: UserPublicKey): Uint<128> {
+    if (!_balances.member(disclose(account))) { return 0; }
+    return _balances.lookup(disclose(account));
 }
 ```
 
@@ -72,76 +104,48 @@ circuit getBalance(account: Either<ZswapCoinPublicKey, ContractAddress>): Uint<1
 
 ## How It Works
 
-### Total Supply Tracking
+### Admin authentication
 
 ```compact
-export ledger totalSupply: Uint<128>;
-
-export circuit getTotalSupply(): Uint<128> {
-    return totalSupply;
-}
+assert(
+    _admin == deriveAdminPublicKey(getAdminSecret()),
+    "Only admin may mint"
+);
 ```
 
-Total supply represents all tokens in circulation:
+The contract stores the admin's *public* key. To mint, the caller must
+produce a ZK proof that they know a witness secret whose hash equals that
+public key. Reading `_admin` off chain gives an attacker the hash, not the
+secret — preimage resistance means they cannot forge the proof.
 
-- **Mint**: Increases total supply
-- **Burn**: Decreases total supply (see [Burning tutorial](/basics/burning))
-- **Transfer**: Doesn't change total supply (moves between accounts)
-
-<Note>
-  **Invariant**: `sum(all balances) == totalSupply` should always be true.
-  Minting and burning are the only operations that change this.
-</Note>
-
-### Minting Process
+### Total supply invariant
 
 ```compact
-circuit _mint(
-    account: Either<ZswapCoinPublicKey, ContractAddress>,
-    amount: Uint<128>
-): [] {
-    // Check total supply won't overflow
-    const MAX_UINT128 = 340282366920938463463374607431768211455 as Uint<128>;
-    assert(totalSupply <= MAX_UINT128 - amount, "Total supply overflow");
-
-    // Update total supply
-    totalSupply = disclose(totalSupply + amount);
-
-    // Get current balance
-    const currentBalance = getBalance(account);
-
-    // Check account balance won't overflow
-    assert(currentBalance <= MAX_UINT128 - amount, "Balance overflow");
-
-    // Increase account balance
-    balances.insert(disclose(account), disclose(currentBalance + amount));
-}
+assert(_totalSupply <= MAX_UINT128 - amount, "Total supply overflow");
+_totalSupply = disclose((_totalSupply + amount) as Uint<128>);
 ```
 
-Minting flow:
+`sum(all balances) == _totalSupply` is maintained by always updating both
+sides together. Minting increases both; burning ([Burning](/basics/burning))
+decreases both; transferring preserves both.
 
-1. **Check total supply overflow**: Prevent exceeding Uint\<128\> maximum
-2. **Increase total supply**: Add new tokens to circulation
-3. **Check account overflow**: Prevent recipient balance overflow
-4. **Credit account**: Add tokens to recipient's balance
-
-See [Overflow Protection](/basics/overflow-protection) for detailed arithmetic safety patterns.
-
-### Access Control
+### Cast back to `Uint<128>` on store
 
 ```compact
-// Public: Anyone can call (should add access control!)
-export circuit mint(
-    account: Either<ZswapCoinPublicKey, ContractAddress>,
-    amount: Uint<128>
-): [] {
-    _mint(account, amount);
-}
+_totalSupply = disclose((_totalSupply + amount) as Uint<128>);
 ```
 
-The example `mint()` function has NO access control - anyone can mint unlimited tokens!
+Arithmetic widens; after the overflow assertion we cast back to `Uint<128>`
+before writing. See [Overflow Protection](/basics/overflow-protection).
 
-See [Access Control](/basics/access-control) for owner-only and role-based patterns.
+## Privacy Note
+
+<Warning>
+  Each mint discloses `account` and `amount` on the public ledger. The full
+  participant set and amount of every mint is observable to anyone reading the
+  chain. This contract is suitable for transparent registries (game items,
+  public rewards) but not for private finance.
+</Warning>
 
 ## What's Next
 

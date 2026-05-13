@@ -36,7 +36,7 @@ We're always looking for new examples that demonstrate Compact features and patt
 
 1. **Choose the right category** - Pick the appropriate directory (basics, applications, or other)
 2. **Create the MDX file** - Follow the concise template structure below
-3. **Write complete, working code** - All examples must compile with Compact v0.16+
+3. **Write complete, working code** - All examples must compile with the current Compact compiler (v0.31.0 at time of writing, pragma `>= 0.23`). Run `compact compile --skip-zk` against the snippet before submitting.
 4. **Keep it concise** - No verbose sections, just code and brief explanations
 5. **Add to navigation** - Update `docs.json` to include your example
 6. **Submit a Pull Request** - Include a clear description of what the example teaches
@@ -59,7 +59,7 @@ description: "One-line description of what this example teaches"
 <Accordion title="View Contract Code">
 
 ```compact
-pragma language_version 0.16;
+pragma language_version >= 0.23;
 
 import CompactStandardLibrary;
 
@@ -67,7 +67,7 @@ import CompactStandardLibrary;
 export ledger exampleState: Opaque<"example">;
 
 export circuit exampleFunction(input: Opaque<"example">): [] {
-  disclose(exampleState = input);
+  exampleState = disclose(input);
 }
 ```
 
@@ -87,7 +87,7 @@ Brief explanation of what this part does (1-2 sentences).
 
 ```compact
 export circuit exampleFunction(input: Opaque<"example">): [] {
-  disclose(exampleState = input);
+  exampleState = disclose(input);
 }
 ```
 
@@ -120,17 +120,16 @@ Concise breakdown of the circuit function.
 
 All Compact code must follow these standards:
 
-**1. Use Exact Version (Recommended)**
+**1. Use the Current Language Version**
 
 ```compact
-pragma language_version 0.16;
+pragma language_version >= 0.23;
 ```
 
-Or version range for stable contracts:
-
-```compact
-pragma language_version >= 0.16 && <= 0.18;
-```
+This matches the recommended floor for the v0.31+ compiler. Avoid bare-version
+forms (`pragma language_version 0.16;`) — they are rejected by the current
+compiler — and avoid pinning to a narrow window unless your contract relies on
+a specific deprecated feature.
 
 **2. Always Import Standard Library**
 
@@ -138,19 +137,30 @@ pragma language_version >= 0.16 && <= 0.18;
 import CompactStandardLibrary;
 ```
 
-**3. Use `disclose()` for Ledger Assignments**
+**3. Use `disclose()` for Ledger Writes from Circuit Parameters**
 
 ```compact
-// ✅ Correct
+// ✅ Correct - disclose() wraps the value being written
+export circuit updateState(newValue: Opaque<"value">): [] {
+  state = disclose(newValue);
+}
+
+// ❌ Wrong - Compiler rejects: "potential witness-value disclosure
+//    must be declared but is not"
+export circuit updateState(newValue: Opaque<"value">): [] {
+  state = newValue;
+}
+
+// ❌ Wrong - disclose() does NOT take a named assignment
 export circuit updateState(newValue: Opaque<"value">): [] {
   disclose(state = newValue);
 }
-
-// ❌ Wrong - Compiler will reject
-export circuit updateState(newValue: Opaque<"value">): [] {
-  state = newValue;  // Missing disclose()
-}
 ```
+
+Every circuit parameter that flows into a ledger write needs `disclose()`,
+regardless of its type. The compiler is conservative: it does not know
+whether a call site passes the parameter from a public source or from
+witness data.
 
 **4. Naming Conventions**
 
@@ -168,7 +178,7 @@ export circuit updateState(newValue: Opaque<"value">): [] {
 
 ```compact
 // 1. Pragma and imports
-pragma language_version 0.16;
+pragma language_version >= 0.23;
 import CompactStandardLibrary;
 
 // 2. Ledger state variables
@@ -176,7 +186,7 @@ export ledger state: Opaque<"example">;
 
 // 3. Circuits (functions)
 export circuit updateState(input: Opaque<"example">): [] {
-  disclose(state = input);
+  state = disclose(input);
 }
 ```
 
@@ -254,8 +264,8 @@ Before submitting your example, verify:
 
 **Code quality:**
 
-- ✅ Code must compile without errors using Compact v0.16+
-- ✅ Uses correct `disclose()` syntax for ledger assignments
+- ✅ Code compiles without errors with `compact compile --skip-zk` (compiler v0.31+, pragma `>= 0.23`)
+- ✅ Uses correct `disclose(value)` syntax — not `disclose(name = value)`
 - ✅ Includes all necessary imports and declarations
 - ✅ Has inline comments explaining key concepts
 
@@ -294,7 +304,7 @@ Add Allowance pattern to basics
 Demonstrates ERC20-style allowance and transferFrom functionality.
 Follows concise code-library style with no verbose sections.
 
-- ✅ Compiles with Compact v0.16
+- ✅ Compiles with current Compact compiler (`compact compile --skip-zk`)
 - ✅ No tutorial content or info boxes
 - ✅ SEO metadata in frontmatter only
 - ✅ Tested with `mintlify dev`
@@ -302,7 +312,7 @@ Follows concise code-library style with no verbose sections.
 
 ## Questions or Issues?
 
-- Questions about Compact: [Midnight Discord](https://discord.gg/midnight)
+- Questions about Compact: [Midnight Discord](https://discord.com/invite/midnightnetwork)
 - Questions about this project: Open a GitHub issue
 - Bugs or typos: Create an issue or submit a fix directly
 

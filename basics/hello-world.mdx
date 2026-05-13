@@ -14,7 +14,7 @@ description: "Store and retrieve messages on-chain."
 <Accordion title="View Contract Code">
 
 ```compact
-pragma language_version 0.16;
+pragma language_version >= 0.23;
 
 import CompactStandardLibrary;
 
@@ -23,7 +23,7 @@ export ledger message: Opaque<"string">;
 
 // Store a new message
 export circuit storeMessage(customMessage: Opaque<"string">): [] {
-    disclose(message = customMessage);
+    message = disclose(customMessage);
 }
 
 // Retrieve the current message
@@ -39,10 +39,10 @@ export circuit getMessage(): Opaque<"string"> {
 ### Pragma Directive
 
 ```compact
-pragma language_version 0.16;
+pragma language_version >= 0.23;
 ```
 
-Specifies the compiler version.
+Specifies the minimum Compact compiler version this contract supports.
 
 ### Import Statement
 
@@ -50,7 +50,7 @@ Specifies the compiler version.
 import CompactStandardLibrary;
 ```
 
-Provides essential types and functions.
+Provides built-in types like `Opaque`, `Bytes`, and stdlib functions.
 
 ### Ledger Declaration
 
@@ -58,25 +58,39 @@ Provides essential types and functions.
 export ledger message: Opaque<"string">;
 ```
 
-Declares on-chain state. `Opaque<"string">` stores variable-length strings.
+Declares on-chain state. `Opaque<"string">` stores a variable-length byte sequence whose value is opaque to the circuit (hashed inside ZK, full value visible off-chain).
 
 ### Circuits (Functions)
 
 ```compact
 export circuit storeMessage(customMessage: Opaque<"string">): [] {
-    disclose(message = customMessage);
+    message = disclose(customMessage);
 }
 ```
 
-Circuits are functions callable from external applications. `[]` means returns nothing.
+`circuit` declares a function that compiles to a zero-knowledge circuit. `export` makes it callable from outside the contract. `[]` is the empty-tuple unit type — the circuit returns nothing.
 
 ### The disclose() Function
 
 ```compact
-disclose(message = customMessage);
+message = disclose(customMessage);
 ```
 
-Use `disclose()` when assigning user input to ledger variables to make data public.
+`Opaque<"string">` values are treated as witness-tainted: the compiler refuses to write them to the public ledger unless you explicitly **disclose** them. `disclose(x)` is a compiler annotation that says "I know this value flows from a private/witness source to a public location and that's intentional."
+
+If you tried `message = customMessage` without `disclose`, the compiler would reject it with:
+
+```
+potential witness-value disclosure must be declared but is not
+```
+
+<Note>
+  **Every** circuit parameter requires `disclose()` when it flows directly into
+  a ledger write, regardless of its type. The compiler is conservative: it
+  doesn't know whether a given call site supplies the parameter from a public
+  source or from witness data, so it forces you to declare the disclosure
+  explicitly at every ledger boundary.
+</Note>
 
 ## What's Next
 

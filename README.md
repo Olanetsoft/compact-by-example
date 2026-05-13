@@ -19,7 +19,7 @@ A community-driven collection of Compact smart contract examples for building pr
 
 **Prerequisites:**
 
-- Node.js v18 or higher
+- Node.js v20 LTS or higher
 - npm or yarn
 
 **Installation:**
@@ -38,17 +38,18 @@ npm run dev
 
 Visit `http://localhost:3000` to view the documentation locally.
 
+To set up Compact itself (compiler, proof server, wallet), see [setup.mdx](./setup.mdx).
+
 ## Project Structure
 
 ```
 compact-by-example/
-├── basics/              # Fundamentals
-│   ├── hello-world.mdx
-│   ├── first-app.mdx
-│   └── primitive-types.mdx
+├── basics/              # Fundamentals (hello-world, types, mappings, ...)
+├── applications/        # Full token contracts (ERC20, ERC721, ERC1155)
 ├── .github/             # Issue templates, PR templates, CI/CD
 ├── images/              # Assets and graphics
 ├── logo/                # Brand assets
+├── setup.mdx            # Toolchain installation guide
 ├── docs.json            # Mintlify configuration
 └── index.mdx            # Homepage
 ```
@@ -82,8 +83,8 @@ Read our [Contributing Guide](./CONTRIBUTING.md) for detailed instructions.
 ## Community
 
 - [Discord](https://discord.com/invite/midnightnetwork) - Ask questions, share projects
-- [Twitter](https://twitter.com/MidnightNtwrk) - Latest updates
-- [YouTube](https://www.youtube.com/@MidnightNetwork) - Video tutorials
+- [X (Twitter)](https://x.com/MidnightNtwrk) - Latest updates
+- [YouTube](https://www.youtube.com/@midnight.network) - Video tutorials
 
 ## Resources
 

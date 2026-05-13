@@ -1,83 +1,83 @@
 ---
 title: "Token Approval"
 sidebarTitle: "Approval"
-description: "Allow others to spend your tokens."
+description: "Allow others to spend your tokens using witness-derived keypair authentication."
 "og:title": "Token Approval - Compact by Example"
-"og:description": "Token approvals for DEXs and delegated transfers"
+"og:description": "Token approvals authenticated via witness-derived keypairs"
 "twitter:card": "summary_large_image"
 "twitter:title": "Token Approval - Compact by Example"
-"twitter:description": "Token approvals for DEXs and delegated transfers"
+"twitter:description": "Token approvals authenticated via witness-derived keypairs"
 ---
+
+<Warning>
+  This page uses the witness-derived keypair pattern from
+  [Access Control](/basics/access-control). The caller authenticates by
+  proving knowledge of a witness secret whose hash matches the stored
+  `UserPublicKey`. `ownPublicKey()` is **not** used for authentication.
+</Warning>
 
 ## The Contract
 
 <Accordion title="View Contract Code">
 
 ```compact
-pragma language_version >= 0.17.0;
+pragma language_version >= 0.23;
 
 import CompactStandardLibrary;
 
-// Account balances
-export ledger balances: Map<Either<ZswapCoinPublicKey, ContractAddress>, Uint<128>>;
+struct UserSecretKey { bytes: Bytes<32>; }
+struct UserPublicKey { bytes: Bytes<32>; }
+witness getUserSecret(): UserSecretKey;
 
-// Allowances: owner -> (spender -> amount)
-export ledger allowances: Map<
-    Either<ZswapCoinPublicKey, ContractAddress>,
-    Map<Either<ZswapCoinPublicKey, ContractAddress>, Uint<128>>
->;
+// Balances
+export ledger _balances: Map<UserPublicKey, Uint<128>>;
 
-// Approve spender to spend tokens on your behalf
-export circuit approve(
-    spender: Either<ZswapCoinPublicKey, ContractAddress>,
-    amount: Uint<128>
-): Boolean {
-    const owner = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
+// Allowances: owner → (spender → amount)
+export ledger _allowances: Map<UserPublicKey, Map<UserPublicKey, Uint<128>>>;
+
+export circuit deriveUserPublicKey(sk: UserSecretKey): UserPublicKey {
+    return UserPublicKey {
+        bytes: persistentHash<Vector<2, Bytes<32>>>([
+            pad(32, "myapp:user:v1"),
+            sk.bytes
+        ])
+    };
+}
+
+// Approve spender to spend up to `amount` of the caller's tokens
+export circuit approve(spender: UserPublicKey, amount: Uint<128>): Boolean {
+    const owner = disclose(deriveUserPublicKey(getUserSecret()));
     _approve(owner, spender, amount);
     return true;
 }
 
-// Check how much spender is allowed to spend
+// Read remaining allowance
 export circuit allowance(
-    owner: Either<ZswapCoinPublicKey, ContractAddress>,
-    spender: Either<ZswapCoinPublicKey, ContractAddress>
+    owner: UserPublicKey,
+    spender: UserPublicKey
 ): Uint<128> {
-    if (!allowances.member(disclose(owner))) {
+    if (!_allowances.member(disclose(owner))) {
         return 0;
     }
-
-    const spenderAllowances = allowances.lookup(disclose(owner));
-    if (!spenderAllowances.member(disclose(spender))) {
+    if (!_allowances.lookup(disclose(owner)).member(disclose(spender))) {
         return 0;
     }
-
-    return spenderAllowances.lookup(disclose(spender));
+    return _allowances.lookup(disclose(owner)).lookup(disclose(spender));
 }
 
-// Internal: Set approval
+// Internal: write the allowance entry
 circuit _approve(
-    owner: Either<ZswapCoinPublicKey, ContractAddress>,
-    spender: Either<ZswapCoinPublicKey, ContractAddress>,
+    owner: UserPublicKey,
+    spender: UserPublicKey,
     amount: Uint<128>
 ): [] {
-    // Initialize owner's allowance map if needed
-    if (!allowances.member(disclose(owner))) {
-        allowances.insert(
+    if (!_allowances.member(disclose(owner))) {
+        _allowances.insert(
             disclose(owner),
-            default<Map<Either<ZswapCoinPublicKey, ContractAddress>, Uint<128>>>
+            default<Map<UserPublicKey, Uint<128>>>
         );
     }
-
-    // Set allowance for spender
-    allowances.lookup(owner).insert(disclose(spender), disclose(amount));
-}
-
-// Helper
-circuit getBalance(account: Either<ZswapCoinPublicKey, ContractAddress>): Uint<128> {
-    if (!balances.member(disclose(account))) {
-        return 0;
-    }
-    return balances.lookup(disclose(account));
+    _allowances.lookup(disclose(owner)).insert(disclose(spender), disclose(amount));
 }
 ```
 
@@ -85,122 +85,59 @@ circuit getBalance(account: Either<ZswapCoinPublicKey, ContractAddress>): Uint<1
 
 ## How It Works
 
-### Nested Map Structure
+### Authentication
 
 ```compact
-export ledger allowances: Map<
-    Either<ZswapCoinPublicKey, ContractAddress>,
-    Map<Either<ZswapCoinPublicKey, ContractAddress>, Uint<128>>
->;
-```
-
-Allowances use a **Map of Maps** (nested structure):
-
-- **Outer Map**: Owner address → Inner Map
-- **Inner Map**: Spender address → Allowed amount
-
-Example structure:
-
-```
-Alice → {
-  DEX Contract → 1000 tokens,
-  Bob → 50 tokens,
-  Payment Processor → 100 tokens
-}
-Bob → {
-  Subscription Service → 200 tokens
-}
-```
-
-<Note>
-  **Why nested?** Each owner can approve multiple spenders for different
-  amounts. The nested structure tracks all these relationships efficiently.
-</Note>
-
-### Granting Approval
-
-```compact
-export circuit approve(
-    spender: Either<ZswapCoinPublicKey, ContractAddress>,
-    amount: Uint<128>
-): Boolean {
-    const owner = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
+export circuit approve(spender: UserPublicKey, amount: Uint<128>): Boolean {
+    const owner = disclose(deriveUserPublicKey(getUserSecret()));
     _approve(owner, spender, amount);
     return true;
 }
 ```
 
-The approval flow:
+The caller proves knowledge of a witness secret whose hash equals their
+`UserPublicKey`. The contract then writes an allowance entry at
+`_allowances[owner][spender] = amount`.
 
-1. **Owner calls** `approve(spender, amount)`
-2. **Owner = ownPublicKey()**: Caller is automatically the owner
-3. **Permission granted**: Spender can now spend up to `amount` tokens
-4. **Returns true**: Standard ERC20 return value
-
-**Example**: Alice calls `approve(DEX_CONTRACT, 1000)` - the DEX can now spend up to 1000 of Alice's tokens.
-
-<Tip>
-  **Multiple approvals**: You can approve different amounts for different
-  spenders. Each approval is independent.
-</Tip>
-
-### Setting Approval Internally
+### Nested Map structure
 
 ```compact
-circuit _approve(
-    owner: Either<ZswapCoinPublicKey, ContractAddress>,
-    spender: Either<ZswapCoinPublicKey, ContractAddress>,
-    amount: Uint<128>
-): [] {
-    // Initialize owner's allowance map if needed
-    if (!allowances.member(disclose(owner))) {
-        allowances.insert(
-            disclose(owner),
-            default<Map<Either<ZswapCoinPublicKey, ContractAddress>, Uint<128>>>
-        );
-    }
+export ledger _allowances: Map<UserPublicKey, Map<UserPublicKey, Uint<128>>>;
+```
 
-    // Set allowance for spender
-    allowances.lookup(owner).insert(disclose(spender), disclose(amount));
+A two-level map: the outer key is the owner's authenticated public key; the
+inner map records how much each spender may spend.
+
+**Reading the nested map** must be done inline — you cannot bind the inner map
+to a `const`:
+
+```compact
+// ✅ inline lookup is allowed
+_allowances.lookup(disclose(owner)).lookup(disclose(spender));
+
+// ❌ binding the inner Map to a const fails to compile
+// const inner = _allowances.lookup(disclose(owner));  // ADT type error
+```
+
+### Initializing the inner Map
+
+```compact
+if (!_allowances.member(disclose(owner))) {
+    _allowances.insert(disclose(owner), default<Map<UserPublicKey, Uint<128>>>);
 }
 ```
 
-Two-step process:
+`default<Map<K, V>>` produces an empty `Map`, used to initialize the slot for
+a new owner before the first allowance is recorded.
 
-1. **Check if owner exists** in outer Map, create entry if not
-2. **Insert spender amount** in owner's inner Map
-
-This overwrites any previous approval for that spender.
-
-### Checking Allowance
-
-```compact
-export circuit allowance(
-    owner: Either<ZswapCoinPublicKey, ContractAddress>,
-    spender: Either<ZswapCoinPublicKey, ContractAddress>
-): Uint<128> {
-    if (!allowances.member(disclose(owner))) {
-        return 0;
-    }
-
-    const spenderAllowances = allowances.lookup(disclose(owner));
-    if (!spenderAllowances.member(disclose(spender))) {
-        return 0;
-    }
-
-    return spenderAllowances.lookup(disclose(spender));
-}
-```
-
-Two-level lookup:
-
-1. **Check if owner exists** in outer Map → return 0 if not
-2. **Check if spender exists** in owner's inner Map → return 0 if not
-3. **Return amount** if both exist
+## Privacy Note
 
 <Warning>
-  **Always check both levels**: Forgetting to check either Map membership can
-  cause errors when looking up non-existent keys.
+  Every `approve` call reveals the owner, the spender, and the amount on the
+  public ledger. This is appropriate for *transparent* tokens (game items,
+  public registries) but unsuitable for private finance. Midnight's native
+  shielded primitives provide UTXO-based privacy that hides participants and
+  amounts.
 </Warning>
 
 ## What's Next

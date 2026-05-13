@@ -39,8 +39,9 @@ assignees: ''
 
 - **OS**: [e.g. macOS, Windows, Linux]
 - **Browser**: [e.g. Chrome, Safari, Firefox]
-- **Compact Version**: [e.g. 0.16.0]
-- **Node Version**: [e.g. 18.x]
+- **Compact CLI**: [output of `compact --version`, e.g. 0.4.0]
+- **Compact compiler**: [output of `compact compile --version`, e.g. 0.31.0]
+- **Node Version**: [e.g. 20.x]
 
 ## 📝 Additional Context
 

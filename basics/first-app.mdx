@@ -28,7 +28,7 @@ description: "Build a simple counter with state management."
 <Accordion title="View Contract Code">
 
 ```compact
-pragma language_version >= 0.16 && <= 0.18;
+pragma language_version >= 0.23;
 
 import CompactStandardLibrary;
 
@@ -61,7 +61,7 @@ export circuit increment(): [] {
 }
 ```
 
-Increments the counter by 1. Counter values can only increase.
+`Counter` stores a non-negative integer and exposes `.increment(n)`, `.decrement(n)`, `.read()`, and comparison helpers like `.lessThan(n)`. This example only uses `.increment(1)`.
 
 ## What's Next
 
