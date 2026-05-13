@@ -24,7 +24,7 @@ Closes #
 
 <!-- How did you test this? -->
 - [ ] Tested locally with `mintlify dev`
-- [ ] All code examples compile with Compact v0.16+
+- [ ] All code examples compile with the current Compact compiler (`compact compile --skip-zk`)
 - [ ] Verified all links work
 - [ ] Checked responsive design (if applicable)
 

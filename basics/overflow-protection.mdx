@@ -14,20 +14,18 @@ description: "Prevent integer overflow and underflow in arithmetic operations."
 <Accordion title="View Code">
 
 ```compact
-pragma language_version >= 0.17.0;
+pragma language_version >= 0.23;
 
 import CompactStandardLibrary;
 
 export ledger balance: Uint<128>;
 export ledger totalSupply: Uint<128>;
 
-// Maximum value for Uint<128>
-const MAX_UINT128 = 340282366920938463463374607431768211455 as Uint<128>;
-
 // Safe addition with overflow check
 export circuit safeAdd(a: Uint<128>, b: Uint<128>): Uint<128> {
+    const MAX_UINT128: Uint<128> = 340282366920938463463374607431768211455 as Uint<128>;
     assert(a <= MAX_UINT128 - b, "Addition overflow");
-    return a + b;
+    return (a + b) as Uint<128>;
 }
 
 // Safe subtraction with underflow check
@@ -36,38 +34,66 @@ export circuit safeSub(a: Uint<128>, b: Uint<128>): Uint<128> {
     return a - b;
 }
 
-// Safe multiplication with overflow check
-export circuit safeMul(a: Uint<128>, b: Uint<128>): Uint<128> {
-    if (a == 0 || b == 0) {
-        return 0;
-    }
-    assert(a <= MAX_UINT128 / b, "Multiplication overflow");
-    return a * b;
+// Safe multiplication using widening + checked cast
+//
+// Compact has no division operator, so we cannot pre-check
+// `a <= MAX / b`. Instead we let the multiplication widen
+// to a wider intermediate type and assert the result fits
+// back into the target width before casting.
+//
+// Compact's maximum integer width is Uint<248>, so the
+// product of two Uint<128> values cannot be held in a
+// single Compact integer. This helper therefore checks
+// Uint<64> * Uint<64>, where the Uint<128> product always
+// fits.
+export circuit safeMul(a: Uint<64>, b: Uint<64>): Uint<64> {
+    const MAX_UINT64: Uint<64> = 18446744073709551615 as Uint<64>;
+    const product: Uint<128> = (a * b) as Uint<128>;
+    assert(product <= MAX_UINT64 as Uint<128>, "Multiplication overflow");
+    return product as Uint<64>;
 }
 ```
 
 </Accordion>
+
+## Why Compact arithmetic needs casts
+
+When you add two `Uint<128>` values, the result is *not* a `Uint<128>` — it's a wider type that can hold any possible sum:
+
+```compact
+// a + b has type Uint<0..2^129 - 2>, not Uint<128>
+const sum = a + b;
+```
+
+Returning or storing that wider value where a `Uint<128>` is expected fails to compile:
+
+```
+mismatch between actual return type Uint<0..680564733841876926926749214863536422911>
+and declared return type Uint<128>
+```
+
+This forces every arithmetic result to be **either** explicitly cast back (after an overflow check) **or** assigned to a wider variable. There is no silent wraparound, and there is no `/` or `%` operator in Compact.
 
 ## Overflow Checks
 
 ### Addition Overflow
 
 ```compact
-const MAX_UINT128 = 340282366920938463463374607431768211455 as Uint<128>;
+const MAX_UINT128: Uint<128> = 340282366920938463463374607431768211455 as Uint<128>;
 
 // Check: a + b won't exceed MAX_UINT128
 assert(a <= MAX_UINT128 - b, "Addition overflow");
-const result = a + b;
+const result: Uint<128> = (a + b) as Uint<128>;
 ```
 
-Before adding, verify that `a + b` won't exceed the maximum value.
+Before adding, verify that `a + b` won't exceed the maximum value, then cast the widened result back.
 
-**Example**: Adding balances, increasing supply
+**Example**: Increasing total supply during mint.
 
 ```compact
-// Check total supply won't overflow
+const MAX_UINT128: Uint<128> = 340282366920938463463374607431768211455 as Uint<128>;
 assert(totalSupply <= MAX_UINT128 - amount, "Total supply overflow");
-totalSupply = disclose(totalSupply + amount);
+totalSupply = disclose((totalSupply + amount) as Uint<128>);
 ```
 
 ### Subtraction Underflow
@@ -75,15 +101,14 @@ totalSupply = disclose(totalSupply + amount);
 ```compact
 // Check: a - b won't go below zero
 assert(a >= b, "Subtraction underflow");
-const result = a - b;
+const result: Uint<128> = a - b;
 ```
 
-Before subtracting, verify that `a >= b` to prevent negative results.
+Subtraction's result type is already narrow enough for the assertion to make it safe; no cast is needed when the inputs are the same width.
 
-**Example**: Deducting balances, burning tokens
+**Example**: Deducting balances, burning tokens.
 
 ```compact
-// Check sufficient balance
 const currentBalance = getBalance(account);
 assert(currentBalance >= amount, "Insufficient balance");
 balances.insert(disclose(account), disclose(currentBalance - amount));
@@ -91,16 +116,30 @@ balances.insert(disclose(account), disclose(currentBalance - amount));
 
 ### Multiplication Overflow
 
+Because Compact has no division operator, multiplication overflow is checked by **widening the result and asserting it fits**:
+
 ```compact
-// Check: a * b won't exceed MAX_UINT128
-if (a == 0 || b == 0) {
-    return 0;
-}
-assert(a <= MAX_UINT128 / b, "Multiplication overflow");
-const result = a * b;
+const MAX_UINT64: Uint<64> = 18446744073709551615 as Uint<64>;
+const product: Uint<128> = (a * b) as Uint<128>;
+assert(product <= MAX_UINT64 as Uint<128>, "Multiplication overflow");
+const result: Uint<64> = product as Uint<64>;
 ```
 
-Before multiplying, verify the result won't overflow.
+The cast to `Uint<128>` is a widening (zero-cost) cast; the cast back to `Uint<64>` is a narrowing cast that the preceding assertion makes safe.
+
+<Warning>
+  **Compact integers max out at `Uint<248>`.** A full `Uint<128> * Uint<128>`
+  product needs `Uint<256>`, which Compact does not support. If you need to
+  multiply two 128-bit values safely, either narrow the operands first or
+  perform the multiplication in the witness and check the result on-chain.
+</Warning>
+
+<Note>
+  **Compact does not provide `/` or `%`.** If your problem requires division or
+  modulo, perform it off-chain in the witness and pass `quotient` and
+  `remainder` as inputs, then `assert(dividend == quotient * divisor + remainder)`
+  inside the circuit. This is the standard ZK pattern for division.
+</Note>
 
 ## Type Bounds
 
@@ -112,7 +151,13 @@ Different `Uint` sizes have different maximum values:
 - `Uint<64>` max: 18,446,744,073,709,551,615
 - `Uint<128>` max: 340,282,366,920,938,463,463,374,607,431,768,211,455
 
-Always check against the appropriate maximum for your type.
+Always check against the appropriate maximum for your target type before casting back.
+
+<Note>
+  **`const` placement**: top-level `const` is not allowed in Compact. Declare
+  constants inside the circuits that use them (as shown above), or define them
+  as `Field` literals at module level only if the type permits.
+</Note>
 
 ## What's Next
 

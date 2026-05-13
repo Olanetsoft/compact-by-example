@@ -1,126 +1,115 @@
 ---
 title: "Spending Allowance"
 sidebarTitle: "Allowance"
-description: "Spend tokens you've been approved to use."
+description: "Spend tokens you've been approved to use via transferFrom."
 "og:title": "Spending Allowance - Compact by Example"
-"og:description": "Delegated transfers using transferFrom"
+"og:description": "Delegated transfers using transferFrom authenticated via witness keypair"
 "twitter:card": "summary_large_image"
 "twitter:title": "Spending Allowance - Compact by Example"
-"twitter:description": "Delegated transfers using transferFrom"
+"twitter:description": "Delegated transfers via witness-derived keypair authentication"
 ---
+
+<Warning>
+  Continues the witness-derived keypair pattern from
+  [Approval](/basics/approval) and [Access Control](/basics/access-control).
+  The spender authenticates by proving knowledge of their witness secret.
+</Warning>
 
 ## The Contract
 
 <Accordion title="View Contract Code">
 
 ```compact
-pragma language_version >= 0.17.0;
+pragma language_version >= 0.23;
 
 import CompactStandardLibrary;
 
-// Account balances
-export ledger balances: Map<Either<ZswapCoinPublicKey, ContractAddress>, Uint<128>>;
+struct UserSecretKey { bytes: Bytes<32>; }
+struct UserPublicKey { bytes: Bytes<32>; }
+witness getUserSecret(): UserSecretKey;
 
-// Allowances: owner -> (spender -> amount)
-export ledger allowances: Map<
-    Either<ZswapCoinPublicKey, ContractAddress>,
-    Map<Either<ZswapCoinPublicKey, ContractAddress>, Uint<128>>
->;
+// Balances and nested allowance map
+export ledger _balances: Map<UserPublicKey, Uint<128>>;
+export ledger _allowances: Map<UserPublicKey, Map<UserPublicKey, Uint<128>>>;
 
-// Check how much spender is allowed to spend
-export circuit allowance(
-    owner: Either<ZswapCoinPublicKey, ContractAddress>,
-    spender: Either<ZswapCoinPublicKey, ContractAddress>
-): Uint<128> {
-    if (!allowances.member(disclose(owner))) {
-        return 0;
-    }
-
-    const spenderAllowances = allowances.lookup(disclose(owner));
-    if (!spenderAllowances.member(disclose(spender))) {
-        return 0;
-    }
-
-    return spenderAllowances.lookup(disclose(spender));
+export circuit deriveUserPublicKey(sk: UserSecretKey): UserPublicKey {
+    return UserPublicKey {
+        bytes: persistentHash<Vector<2, Bytes<32>>>([
+            pad(32, "myapp:user:v1"),
+            sk.bytes
+        ])
+    };
 }
 
-// Transfer from another account (must be approved)
+// Read remaining allowance
+export circuit allowance(
+    owner: UserPublicKey,
+    spender: UserPublicKey
+): Uint<128> {
+    if (!_allowances.member(disclose(owner))) { return 0; }
+    if (!_allowances.lookup(disclose(owner)).member(disclose(spender))) { return 0; }
+    return _allowances.lookup(disclose(owner)).lookup(disclose(spender));
+}
+
+// transferFrom: caller authenticates as the *spender*, moves tokens
+// from `owner` to `to`, and pays for it with their allowance.
 export circuit transferFrom(
-    from: Either<ZswapCoinPublicKey, ContractAddress>,
-    to: Either<ZswapCoinPublicKey, ContractAddress>,
+    owner: UserPublicKey,
+    to: UserPublicKey,
     amount: Uint<128>
 ): Boolean {
-    const spender = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
-
-    // Check and spend allowance
-    _spendAllowance(from, spender, amount);
-
-    // Perform transfer
-    _transfer(from, to, amount);
-
+    const spender = disclose(deriveUserPublicKey(getUserSecret()));
+    _spendAllowance(owner, spender, amount);
+    _transfer(owner, to, amount);
     return true;
 }
 
-// Internal: Spend allowance
+// Internal: spend (decrement) the allowance, with infinite-approval shortcut
 circuit _spendAllowance(
-    owner: Either<ZswapCoinPublicKey, ContractAddress>,
-    spender: Either<ZswapCoinPublicKey, ContractAddress>,
+    owner: UserPublicKey,
+    spender: UserPublicKey,
     amount: Uint<128>
 ): [] {
-    const currentAllowance = allowance(owner, spender);
-
-    // Check for infinite allowance
-    const MAX_UINT128 = 340282366920938463463374607431768211455 as Uint<128>;
-    if (currentAllowance == MAX_UINT128) {
-        return; // Infinite approval, don't decrease
+    const current = allowance(owner, spender);
+    const MAX_UINT128: Uint<128> = 340282366920938463463374607431768211455 as Uint<128>;
+    if (current < MAX_UINT128) {
+        assert(current >= amount, "Insufficient allowance");
+        _approve(owner, spender, current - amount);
     }
-
-    // Check sufficient allowance
-    assert(currentAllowance >= amount, "Insufficient allowance");
-
-    // Decrease allowance
-    _approve(owner, spender, currentAllowance - amount);
+    // current == MAX_UINT128 means "infinite approval"; leave allowance alone.
 }
 
-// Internal: Set approval
+// Internal: write the allowance entry
 circuit _approve(
-    owner: Either<ZswapCoinPublicKey, ContractAddress>,
-    spender: Either<ZswapCoinPublicKey, ContractAddress>,
+    owner: UserPublicKey,
+    spender: UserPublicKey,
     amount: Uint<128>
 ): [] {
-    if (!allowances.member(disclose(owner))) {
-        allowances.insert(
-            disclose(owner),
-            default<Map<Either<ZswapCoinPublicKey, ContractAddress>, Uint<128>>>
-        );
+    if (!_allowances.member(disclose(owner))) {
+        _allowances.insert(disclose(owner), default<Map<UserPublicKey, Uint<128>>>);
     }
-
-    allowances.lookup(owner).insert(disclose(spender), disclose(amount));
+    _allowances.lookup(disclose(owner)).insert(disclose(spender), disclose(amount));
 }
 
-// Internal: Transfer tokens
+// Internal: move tokens from `sender` to `to`
 circuit _transfer(
-    from: Either<ZswapCoinPublicKey, ContractAddress>,
-    to: Either<ZswapCoinPublicKey, ContractAddress>,
+    sender: UserPublicKey,
+    to: UserPublicKey,
     amount: Uint<128>
 ): [] {
-    const fromBalance = getBalance(from);
+    const MAX_UINT128: Uint<128> = 340282366920938463463374607431768211455 as Uint<128>;
+    const fromBalance = getBalance(sender);
     assert(fromBalance >= amount, "Insufficient balance");
-
     const toBalance = getBalance(to);
-    const MAX_UINT128 = 340282366920938463463374607431768211455 as Uint<128>;
     assert(toBalance <= MAX_UINT128 - amount, "Balance overflow");
-
-    balances.insert(disclose(from), disclose(fromBalance - amount));
-    balances.insert(disclose(to), disclose(toBalance + amount));
+    _balances.insert(disclose(sender), disclose(fromBalance - amount));
+    _balances.insert(disclose(to), disclose((toBalance + amount) as Uint<128>));
 }
 
 // Helper
-circuit getBalance(account: Either<ZswapCoinPublicKey, ContractAddress>): Uint<128> {
-    if (!balances.member(disclose(account))) {
-        return 0;
-    }
-    return balances.lookup(disclose(account));
+circuit getBalance(account: UserPublicKey): Uint<128> {
+    if (!_balances.member(disclose(account))) { return 0; }
+    return _balances.lookup(disclose(account));
 }
 ```
 
@@ -128,122 +117,65 @@ circuit getBalance(account: Either<ZswapCoinPublicKey, ContractAddress>): Uint<1
 
 ## How It Works
 
-### TransferFrom Flow
+### `transferFrom` authenticates the spender
 
 ```compact
 export circuit transferFrom(
-    from: Either<ZswapCoinPublicKey, ContractAddress>,
-    to: Either<ZswapCoinPublicKey, ContractAddress>,
+    owner: UserPublicKey,
+    to: UserPublicKey,
     amount: Uint<128>
 ): Boolean {
-    const spender = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
-
-    // Check and spend allowance
-    _spendAllowance(from, spender, amount);
-
-    // Perform transfer
-    _transfer(from, to, amount);
-
+    const spender = disclose(deriveUserPublicKey(getUserSecret()));
+    _spendAllowance(owner, spender, amount);
+    _transfer(owner, to, amount);
     return true;
 }
 ```
 
-The `transferFrom` pattern:
+The caller must produce a ZK proof that they hold the secret behind the
+spender's stored `UserPublicKey`. The `owner` and `to` are explicit
+parameters — they are *targets* of the operation, not authorities.
 
-1. **Spender calls** `transferFrom(owner, recipient, amount)`
-2. **Spender = ownPublicKey()**: Caller must be the approved spender
-3. **Verify allowance**: Check spender is approved for at least `amount`
-4. **Decrease allowance**: Spend the approved tokens
-5. **Transfer tokens**: Move from owner to recipient
+### Why this resists impersonation
 
-**Example**: DEX calls `transferFrom(alice, buyer, 500)` to sell Alice's tokens. This works because Alice previously called `approve(DEX, 1000)`.
+`_spendAllowance(owner, spender, amount)` requires that the inner map
+`_allowances[owner][spender]` already holds at least `amount`. Because the
+allowance was written by `owner` against a specific `spender` public key, and
+because `spender` here was just derived from the caller's witness secret, the
+caller must actually hold the spender's secret. An attacker with no secret
+cannot synthesise a passing proof, no matter what they read from the chain.
 
-<Note>
-  **Three parties involved**: Owner (has tokens), Spender (approved to move
-  them), Recipient (receives tokens). Spender and recipient can be different!
-</Note>
-
-### Spending Allowance
+### Infinite approval
 
 ```compact
-circuit _spendAllowance(
-    owner: Either<ZswapCoinPublicKey, ContractAddress>,
-    spender: Either<ZswapCoinPublicKey, ContractAddress>,
-    amount: Uint<128>
-): [] {
-    const currentAllowance = allowance(owner, spender);
-
-    // Check for infinite allowance
-    const MAX_UINT128 = 340282366920938463463374607431768211455 as Uint<128>;
-    if (currentAllowance == MAX_UINT128) {
-        return; // Infinite approval, don't decrease
-    }
-
-    // Check sufficient allowance
-    assert(currentAllowance >= amount, "Insufficient allowance");
-
-    // Decrease allowance
-    _approve(owner, spender, currentAllowance - amount);
+if (current < MAX_UINT128) {
+    assert(current >= amount, "Insufficient allowance");
+    _approve(owner, spender, current - amount);
 }
 ```
 
-Allowance spending logic:
+If the recorded allowance equals `MAX_UINT128`, treat it as unlimited and skip
+the decrement. Useful for long-lived integrations (e.g. a DEX).
 
-1. **Get current allowance**: Check how much spender can spend
-2. **Infinite approval check**: If allowance = MAX_UINT128, skip decrease (infinite approval)
-3. **Sufficient check**: Verify spender has enough allowance
-4. **Decrease allowance**: Subtract spent amount from remaining allowance
-
-See [Overflow Protection](/basics/overflow-protection) for safe arithmetic patterns.
-
-### Checking Remaining Allowance
+### Partial spending
 
 ```compact
-export circuit allowance(
-    owner: Either<ZswapCoinPublicKey, ContractAddress>,
-    spender: Either<ZswapCoinPublicKey, ContractAddress>
-): Uint<128> {
-    if (!allowances.member(disclose(owner))) {
-        return 0;
-    }
-
-    const spenderAllowances = allowances.lookup(disclose(owner));
-    if (!spenderAllowances.member(disclose(spender))) {
-        return 0;
-    }
-
-    return spenderAllowances.lookup(disclose(spender));
-}
-```
-
-Anyone can check how much a spender is allowed to spend:
-
-- Public visibility for transparency
-- Used by front-ends to show approval status
-- Returns 0 if no approval exists
-
-- Returns 0 if no approval exists
-
-### Partial Spending
-
-```compact
-// Alice approves Bob for 1000 tokens
+// Alice approves Bob for 1000 tokens (single transaction)
 _approve(alice, bob, 1000);
 
-// Bob can spend in multiple transactions
-_spendAllowance(alice, bob, 300); // Remaining: 700
-_transfer(alice, recipient1, 300);
-
-_spendAllowance(alice, bob, 400); // Remaining: 300
-_transfer(alice, recipient2, 400);
-
-_spendAllowance(alice, bob, 300); // Remaining: 0
-_transfer(alice, recipient3, 300);
-
-// Bob's allowance is now exhausted
+// Bob calls transferFrom multiple times; the allowance decreases each call
+//   transferFrom(alice, recipient1, 300)  → remaining: 700
+//   transferFrom(alice, recipient2, 400)  → remaining: 300
+//   transferFrom(alice, recipient3, 300)  → remaining: 0
+//   transferFrom(alice, recipient4, 1)    → "Insufficient allowance"
 ```
 
-Allowances can be spent gradually over multiple transactions.
+## Privacy Note
+
+<Warning>
+  Each `transferFrom` writes the (owner, spender, amount) tuple to the public
+  ledger. The participant graph is visible to chain observers.
+</Warning>
 
 ## What's Next
 

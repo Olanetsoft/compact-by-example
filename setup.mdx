@@ -43,29 +43,42 @@ Lace Midnight Preview wallet is a browser extension wallet for the Midnight netw
 
 ## Install Compact
 
-### 4. Install Compact using the installer script
+### 4. Install the Compact developer CLI
 
-Use the following command to install the pre-built binaries:
-
-```bash
-curl --proto '=https' --tlsv1.2 -LsSf https://github.com/midnightntwrk/compact/releases/download/compact-v0.2.0/compact-installer.sh | sh
-```
-
-### 5. Update your shell PATH
-
-Add Compact to your PATH:
+The Compact developer CLI (`compact`) manages compiler versions, formatting, and project tooling. Install the latest release:
 
 ```bash
-# Bash/Zsh
-export PATH="$HOME/.compact/bin:$PATH"
-source ~/.bashrc  # or ~/.zshrc
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/midnightntwrk/compact/releases/latest/download/compact-installer.sh | sh
 ```
 
-### 6. Verify installation
+The installer adds `compact` to `$HOME/.compact/bin` and updates your shell rc file (`~/.bashrc` or `~/.zshrc`).
+
+### 5. Activate the new PATH
+
+Open a new terminal, or source your shell rc file:
 
 ```bash
-compact --version
+# Bash
+source ~/.bashrc
+
+# Zsh
+source ~/.zshrc
 ```
+
+### 6. Install a compiler and verify
+
+The CLI is a *manager*; you still need to install a Compact compiler:
+
+```bash
+compact self update        # ensure CLI is on the latest version
+compact update             # download the latest compiler
+compact --version          # prints the CLI version
+compact compile --version  # prints the compiler version (e.g. 0.31.0)
+```
+
+<Check>
+  **Verification**: both commands print a version. If `compact compile --version` errors with "No default compiler set," re-run `compact update`.
+</Check>
 
 ## Set up the proof server
 
@@ -109,11 +122,13 @@ docker --version
 
 ### 8. Run the proof server
 
+Pin a specific image tag so behavior is reproducible. Check the [proof-server releases](https://github.com/midnightntwrk/midnight-node-docker) for the current tag, then run:
+
 ```bash
-docker run -p 6300:6300 midnightnetwork/proof-server -- 'midnight-proof-server --network testnet'
+docker run -p 6300:6300 midnightnetwork/proof-server:latest -- 'midnight-proof-server --network testnet'
 ```
 
-Keep this terminal open when developing.
+Keep this terminal open when developing. The proof server listens on `localhost:6300`.
 
 ## Install Compact VS Code extension
 

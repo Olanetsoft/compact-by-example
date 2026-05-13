@@ -29,7 +29,9 @@ assignees: ''
 <!-- Paste your complete Compact code here -->
 
 ```compact
-pragma language_version 0.16;
+pragma language_version >= 0.23;
+
+import CompactStandardLibrary;
 
 // Your complete example here
 
@@ -39,7 +41,7 @@ pragma language_version 0.16;
 
 Before submitting, please ensure:
 
-- [ ] Code compiles with Compact v0.16+
+- [ ] Code compiles with the current Compact compiler (`compact compile --skip-zk`)
 - [ ] Code has been tested and works correctly
 - [ ] Comments explain key concepts
 - [ ] Follows the [example template](https://github.com/Olanetsoft/compact-by-example/blob/main/CONTRIBUTING.md#example-template)

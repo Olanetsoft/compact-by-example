@@ -1,217 +1,212 @@
 ---
 title: "Fungible Token (ERC20)"
 sidebarTitle: "ERC20 Token"
-description: "Standard fungible token implementation."
+description: "Standard fungible token with witness-derived keypair authentication."
 "og:title": "ERC20 Token - Compact by Example"
-"og:description": "ERC20-compatible fungible tokens with transfers and approvals"
+"og:description": "ERC20-style fungible tokens with proper caller authentication on Midnight"
 "twitter:card": "summary_large_image"
 "twitter:title": "ERC20 Token - Compact by Example"
-"twitter:description": "ERC20-compatible fungible tokens with transfers and approvals"
+"twitter:description": "ERC20-style fungible tokens with proper caller authentication on Midnight"
 ---
+
+<Warning>
+  **This is an *account-model* token. Balances and transfers are visible on
+  chain.** Every transfer publishes (sender, recipient, amount). The
+  participant graph is fully observable.
+
+  Use this pattern for transparent registries (game economies, public reward
+  programs) — **not** for private finance. For private payments, use
+  Midnight's native shielded primitives (`sendShielded`, `mintShieldedToken`,
+  etc.) which keep balances and counterparties in ZK-committed UTXOs.
+</Warning>
+
+<Warning>
+  **Authentication uses witness-derived keypairs**, not `ownPublicKey()`.
+  See [Access Control](/basics/access-control) for the rationale and
+  [Transfer](/basics/transfer) for the building block this contract uses.
+</Warning>
 
 ## The Contract
 
 <Accordion title="View Contract Code">
 
 ```compact
-pragma language_version >= 0.17.0;
+pragma language_version >= 0.23;
 
 import CompactStandardLibrary;
 
-// Initialization state
-export ledger _isInitialized: Boolean;
+// Caller keypair (witness-derived) — used to authenticate users
+struct UserSecretKey { bytes: Bytes<32>; }
+struct UserPublicKey { bytes: Bytes<32>; }
+witness getUserSecret(): UserSecretKey;
 
-// Token metadata
+// Admin keypair (witness-derived) — gates mint and burn
+struct AdminSecretKey { bytes: Bytes<32>; }
+struct AdminPublicKey { bytes: Bytes<32>; }
+witness getAdminSecret(): AdminSecretKey;
+
+// Token metadata (sealed: settable only in the constructor)
 export sealed ledger _name: Opaque<"string">;
 export sealed ledger _symbol: Opaque<"string">;
 export sealed ledger _decimals: Uint<8>;
 
-// Token balances and allowances
-export ledger _balances: Map<Either<ZswapCoinPublicKey, ContractAddress>, Uint<128>>;
-export ledger _allowances: Map<Either<ZswapCoinPublicKey, ContractAddress>, Map<Either<ZswapCoinPublicKey, ContractAddress>, Uint<128>>>;
+// On-chain admin and ledger state
+export ledger _admin: AdminPublicKey;
+export ledger _balances: Map<UserPublicKey, Uint<128>>;
+export ledger _allowances: Map<UserPublicKey, Map<UserPublicKey, Uint<128>>>;
 export ledger _totalSupply: Uint<128>;
 
-// Initialize the token (can only be called once)
-export circuit initialize(
+constructor(
+    initialAdmin: AdminPublicKey,
     name_: Opaque<"string">,
     symbol_: Opaque<"string">,
     decimals_: Uint<8>
-): [] {
-    assert(!_isInitialized, "Already initialized");
-    _isInitialized = disclose(true);
-
+) {
+    _admin = disclose(initialAdmin);
     _name = disclose(name_);
     _symbol = disclose(symbol_);
     _decimals = disclose(decimals_);
 }
 
-// Get token name
-export circuit name(): Opaque<"string"> {
-    assert(_isInitialized, "Not initialized");
-    return _name;
+// Key derivation
+export circuit deriveUserPublicKey(sk: UserSecretKey): UserPublicKey {
+    return UserPublicKey {
+        bytes: persistentHash<Vector<2, Bytes<32>>>([
+            pad(32, "erc20:user:v1"),
+            sk.bytes
+        ])
+    };
 }
 
-// Get token symbol
-export circuit symbol(): Opaque<"string"> {
-    assert(_isInitialized, "Not initialized");
-    return _symbol;
+export circuit deriveAdminPublicKey(sk: AdminSecretKey): AdminPublicKey {
+    return AdminPublicKey {
+        bytes: persistentHash<Vector<2, Bytes<32>>>([
+            pad(32, "erc20:admin:v1"),
+            sk.bytes
+        ])
+    };
 }
 
-// Get decimals
-export circuit decimals(): Uint<8> {
-    assert(_isInitialized, "Not initialized");
-    return _decimals;
-}
+// Metadata readers
+export circuit name(): Opaque<"string"> { return _name; }
+export circuit symbol(): Opaque<"string"> { return _symbol; }
+export circuit decimals(): Uint<8> { return _decimals; }
+export circuit totalSupply(): Uint<128> { return _totalSupply; }
 
-// Get total supply
-export circuit totalSupply(): Uint<128> {
-    assert(_isInitialized, "Not initialized");
-    return _totalSupply;
-}
-
-// Get balance of an account
-export circuit balanceOf(account: Either<ZswapCoinPublicKey, ContractAddress>): Uint<128> {
-    assert(_isInitialized, "Not initialized");
-    if (!_balances.member(disclose(account))) {
-        return 0;
-    }
+export circuit balanceOf(account: UserPublicKey): Uint<128> {
+    if (!_balances.member(disclose(account))) { return 0; }
     return _balances.lookup(disclose(account));
 }
 
-// Transfer tokens
-export circuit transfer(to: Either<ZswapCoinPublicKey, ContractAddress>, value: Uint<128>): Boolean {
-    assert(_isInitialized, "Not initialized");
-    const owner = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
+// Transfer — caller authenticates as the sender
+export circuit transfer(to: UserPublicKey, value: Uint<128>): Boolean {
+    const owner = disclose(deriveUserPublicKey(getUserSecret()));
     _transfer(owner, to, value);
     return true;
 }
 
-// Approve spender
-export circuit approve(spender: Either<ZswapCoinPublicKey, ContractAddress>, value: Uint<128>): Boolean {
-    assert(_isInitialized, "Not initialized");
-    const owner = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
+// Approve — caller authenticates as the owner
+export circuit approve(spender: UserPublicKey, value: Uint<128>): Boolean {
+    const owner = disclose(deriveUserPublicKey(getUserSecret()));
     _approve(owner, spender, value);
     return true;
 }
 
-// Get allowance
-export circuit allowance(
-    owner: Either<ZswapCoinPublicKey, ContractAddress>,
-    spender: Either<ZswapCoinPublicKey, ContractAddress>
-): Uint<128> {
-    assert(_isInitialized, "Not initialized");
-    if (!_allowances.member(disclose(owner)) || !_allowances.lookup(owner).member(disclose(spender))) {
-        return 0;
-    }
-    return _allowances.lookup(owner).lookup(disclose(spender));
+// Read remaining allowance
+export circuit allowance(owner: UserPublicKey, spender: UserPublicKey): Uint<128> {
+    if (!_allowances.member(disclose(owner))) { return 0; }
+    if (!_allowances.lookup(disclose(owner)).member(disclose(spender))) { return 0; }
+    return _allowances.lookup(disclose(owner)).lookup(disclose(spender));
 }
 
-// Transfer from approved account
+// transferFrom — caller authenticates as the spender
 export circuit transferFrom(
-    from: Either<ZswapCoinPublicKey, ContractAddress>,
-    to: Either<ZswapCoinPublicKey, ContractAddress>,
+    owner: UserPublicKey,
+    to: UserPublicKey,
     value: Uint<128>
 ): Boolean {
-    assert(_isInitialized, "Not initialized");
-    const spender = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
-    _spendAllowance(from, spender, value);
-    _transfer(from, to, value);
+    const spender = disclose(deriveUserPublicKey(getUserSecret()));
+    _spendAllowance(owner, spender, value);
+    _transfer(owner, to, value);
     return true;
 }
 
-// Internal transfer function
+// Admin: mint
+export circuit mint(account: UserPublicKey, value: Uint<128>): [] {
+    assertAdmin();
+    _mint(account, value);
+}
+
+// Admin: burn (forceful)
+export circuit adminBurn(account: UserPublicKey, value: Uint<128>): [] {
+    assertAdmin();
+    _burn(account, value);
+}
+
+// Self-burn: caller burns their own tokens
+export circuit burn(value: Uint<128>): [] {
+    const account = disclose(deriveUserPublicKey(getUserSecret()));
+    _burn(account, value);
+}
+
+// Internals
+circuit assertAdmin(): [] {
+    assert(_admin == deriveAdminPublicKey(getAdminSecret()), "Not admin");
+}
+
 circuit _transfer(
-    from: Either<ZswapCoinPublicKey, ContractAddress>,
-    to: Either<ZswapCoinPublicKey, ContractAddress>,
+    sender: UserPublicKey,
+    to: UserPublicKey,
     value: Uint<128>
 ): [] {
-    assert(!isKeyOrAddressZero(from), "Invalid sender");
-    assert(!isKeyOrAddressZero(to), "Invalid receiver");
-
-    const fromBal = balanceOf(from);
+    const MAX_UINT128: Uint<128> = 340282366920938463463374607431768211455 as Uint<128>;
+    const fromBal = balanceOf(sender);
     assert(fromBal >= value, "Insufficient balance");
-    _balances.insert(disclose(from), disclose(fromBal - value as Uint<128>));
-
     const toBal = balanceOf(to);
-    _balances.insert(disclose(to), disclose(toBal + value as Uint<128>));
+    assert(toBal <= MAX_UINT128 - value, "Balance overflow");
+    _balances.insert(disclose(sender), disclose(fromBal - value));
+    _balances.insert(disclose(to), disclose((toBal + value) as Uint<128>));
 }
 
-// Internal approve function
 circuit _approve(
-    owner: Either<ZswapCoinPublicKey, ContractAddress>,
-    spender: Either<ZswapCoinPublicKey, ContractAddress>,
+    owner: UserPublicKey,
+    spender: UserPublicKey,
     value: Uint<128>
 ): [] {
-    assert(!isKeyOrAddressZero(owner), "Invalid owner");
-    assert(!isKeyOrAddressZero(spender), "Invalid spender");
-
     if (!_allowances.member(disclose(owner))) {
-        _allowances.insert(disclose(owner), default<Map<Either<ZswapCoinPublicKey, ContractAddress>, Uint<128>>>);
+        _allowances.insert(disclose(owner), default<Map<UserPublicKey, Uint<128>>>);
     }
-    _allowances.lookup(owner).insert(disclose(spender), disclose(value));
+    _allowances.lookup(disclose(owner)).insert(disclose(spender), disclose(value));
 }
 
-// Spend allowance
 circuit _spendAllowance(
-    owner: Either<ZswapCoinPublicKey, ContractAddress>,
-    spender: Either<ZswapCoinPublicKey, ContractAddress>,
+    owner: UserPublicKey,
+    spender: UserPublicKey,
     value: Uint<128>
 ): [] {
-    const currentAllowance = allowance(owner, spender);
-    const MAX_UINT128 = 340282366920938463463374607431768211455;
-
-    if (currentAllowance < MAX_UINT128) {
-        assert(currentAllowance >= value, "Insufficient allowance");
-        _approve(owner, spender, currentAllowance - value as Uint<128>);
+    const current = allowance(owner, spender);
+    const MAX_UINT128: Uint<128> = 340282366920938463463374607431768211455 as Uint<128>;
+    if (current < MAX_UINT128) {
+        assert(current >= value, "Insufficient allowance");
+        _approve(owner, spender, current - value);
     }
 }
 
-// Mint new tokens
-export circuit _mint(
-    account: Either<ZswapCoinPublicKey, ContractAddress>,
-    value: Uint<128>
-): [] {
-    assert(_isInitialized, "Not initialized");
-    assert(!isKeyOrAddressZero(account), "Invalid receiver");
-
-    const MAX_UINT128 = 340282366920938463463374607431768211455;
-    assert(MAX_UINT128 - _totalSupply >= value, "Mint overflow");
-
-    _totalSupply = disclose(_totalSupply + value as Uint<128>);
-
-    const balance = balanceOf(account);
-    _balances.insert(disclose(account), disclose(balance + value as Uint<128>));
+circuit _mint(account: UserPublicKey, value: Uint<128>): [] {
+    const MAX_UINT128: Uint<128> = 340282366920938463463374607431768211455 as Uint<128>;
+    assert(_totalSupply <= MAX_UINT128 - value, "Total supply overflow");
+    _totalSupply = disclose((_totalSupply + value) as Uint<128>);
+    const bal = balanceOf(account);
+    assert(bal <= MAX_UINT128 - value, "Balance overflow");
+    _balances.insert(disclose(account), disclose((bal + value) as Uint<128>));
 }
 
-// Burn tokens
-export circuit _burn(
-    account: Either<ZswapCoinPublicKey, ContractAddress>,
-    value: Uint<128>
-): [] {
-    assert(_isInitialized, "Not initialized");
-    assert(!isKeyOrAddressZero(account), "Invalid sender");
-
-    const balance = balanceOf(account);
-    assert(balance >= value, "Insufficient balance");
-    _balances.insert(disclose(account), disclose(balance - value as Uint<128>));
-
-    _totalSupply = disclose(_totalSupply - value as Uint<128>);
-}
-
-// Helper Functions
-// These would typically be imported from OpenZeppelin's Utils module
-circuit isKeyOrAddressZero(keyOrAddress: Either<ZswapCoinPublicKey, ContractAddress>): Boolean {
-    return isContractAddress(keyOrAddress)
-        ? default<ContractAddress> == keyOrAddress.right
-        : default<ZswapCoinPublicKey> == keyOrAddress.left;
-}
-
-circuit isContractAddress(keyOrAddress: Either<ZswapCoinPublicKey, ContractAddress>): Boolean {
-    return !keyOrAddress.is_left;
-}
-
-circuit burnAddress(): Either<ZswapCoinPublicKey, ContractAddress> {
-    return left<ZswapCoinPublicKey, ContractAddress>(default<ZswapCoinPublicKey>);
+circuit _burn(account: UserPublicKey, value: Uint<128>): [] {
+    const bal = balanceOf(account);
+    assert(bal >= value, "Insufficient balance");
+    assert(_totalSupply >= value, "Total supply underflow");
+    _balances.insert(disclose(account), disclose(bal - value));
+    _totalSupply = disclose(_totalSupply - value);
 }
 ```
 
@@ -219,65 +214,61 @@ circuit burnAddress(): Either<ZswapCoinPublicKey, ContractAddress> {
 
 ## How It Works
 
-This ERC20 token implementation combines all the patterns from the basics tutorials. For detailed explanations of each concept, see the linked tutorials.
+This ERC20 implementation combines the patterns from the basics tutorials.
+For detailed explanations, follow the linked sub-tutorials.
 
-### Initialization Protection
+### Authentication
 
-The contract uses an initialization guard to ensure `initialize()` can only be called once:
+Every state-changing circuit authenticates the caller by **proving knowledge
+of a witness secret** whose `persistentHash` equals a stored public key:
 
-```compact
-export ledger _isInitialized: Boolean;
+- `transfer`, `approve`, `burn` → caller authenticates as a `UserPublicKey`
+- `transferFrom` → caller authenticates as the spender
+- `mint`, `adminBurn` → caller authenticates as the admin
 
-export circuit initialize(...): [] {
-    assert(!_isInitialized, "Already initialized");
-    _isInitialized = disclose(true);
-    // ... set metadata
-}
-```
+See [Access Control](/basics/access-control) for why `ownPublicKey()`
+**cannot** be used here.
 
-All public circuits check `assert(_isInitialized, "Not initialized")` before executing.
-
-### Core Token Features
-
-**Balance Tracking** - Uses Map storage to track token amounts per account. See [Mappings tutorial](/basics/mappings).
-
-**Transfers** - Implements `transfer()` and internal `_transfer()` with balance validation and overflow protection. See [Transfer tutorial](/basics/transfer) for details.
-
-**Approvals** - Nested Map structure (`owner → spender → amount`) enables delegated transfers. See [Approval tutorial](/basics/approval) for granting permissions and [Allowance tutorial](/basics/allowance) for spending approved tokens.
-
-**Minting & Burning** - Internal `_mint()` and `_burn()` functions manage token supply with overflow checks. See [Minting tutorial](/basics/minting) and [Burning tutorial](/basics/burning) for implementation details.
-
-### ERC20-Specific Notes
-
-- **Uint\<128\> amounts**: Compact doesn't support Uint\<256\> due to circuit constraints (max: 340 undecillion tokens)
-- **Boolean returns**: Functions return `true` for ERC20 compatibility
-- **Decimals**: Usually 18 for currency tokens, set once during initialization
-- **Infinite approval**: Set allowance to `MAX_UINT128` for permanent approval
-
-### Helper Functions
-
-The contract uses utility functions for address validation:
+### Initialization
 
 ```compact
-circuit isKeyOrAddressZero(keyOrAddress: Either<ZswapCoinPublicKey, ContractAddress>): Boolean {
-    return isContractAddress(keyOrAddress)
-        ? default<ContractAddress> == keyOrAddress.right
-        : default<ZswapCoinPublicKey> == keyOrAddress.left;
-}
-
-circuit burnAddress(): Either<ZswapCoinPublicKey, ContractAddress> {
-    return left<ZswapCoinPublicKey, ContractAddress>(default<ZswapCoinPublicKey>);
-}
+constructor(
+    initialAdmin: AdminPublicKey,
+    name_: Opaque<"string">,
+    symbol_: Opaque<"string">,
+    decimals_: Uint<8>
+)
 ```
 
-- **isKeyOrAddressZero**: Checks if an address is the zero/default address. Returns true for uninitialized addresses.
-- **burnAddress**: Returns the burn address, represented as the default ZswapCoinPublicKey. Used in minting (from burn address) and burning (to burn address).
+The constructor seeds `_admin` and the `sealed` metadata fields (`_name`,
+`_symbol`, `_decimals`). `sealed` ledger fields can only be written from the
+constructor, so they cannot be modified after deployment — exactly the
+"set once, read forever" semantics ERC20 metadata wants.
 
-<Note>
-  In production OpenZeppelin contracts, these utilities are imported from the
-  `Utils` module. The implementations shown here match the OpenZeppelin Compact
-  Contracts v0.0.1-alpha.0 specification.
-</Note>
+### Total supply invariant
+
+```compact
+_totalSupply = disclose((_totalSupply + value) as Uint<128>);
+```
+
+`sum(all balances) == _totalSupply` is preserved: `mint` increases both,
+`_burn` decreases both, `_transfer` preserves both. See
+[Overflow Protection](/basics/overflow-protection).
+
+### Why no `isKeyOrAddressZero` / `burnAddress` helpers?
+
+`UserPublicKey` is a `Bytes<32>` hash of a witness secret. There is no
+canonical "zero address" — the burn happens by deducting from a balance
+without crediting it elsewhere (`_burn`), and admin authority is enforced via
+the keypair check, not by checking for the default value.
+
+### Privacy trade-off
+
+The keypair scheme authenticates the caller but does not hide them.
+`_balances` stores `UserPublicKey → amount`; every write reveals which key
+moved and by how much. For genuinely private tokens, use Midnight's shielded
+primitives — they're built on UTXOs and ZK commitments and don't expose the
+participant graph.
 
 ## Try It Yourself
 
@@ -290,41 +281,34 @@ mkdir my-token && cd my-token
 mkdir -p contracts
 ```
 
-**2. Save the contract:**
+**2. Save the contract** at `contracts/my-token.compact`.
 
-Create `contracts/my-token.compact` with the code above.
-
-**3. Initialize your token:**
-
-In your contract constructor:
-
-```compact
-circuit constructor(): [] {
-    initialize("My Token", "MTK", 18);
-    // Mint initial supply to deployer
-    const deployer = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
-    _mint(deployer, 1000000 * (10 ** 18)); // 1 million tokens
-}
-```
-
-**4. Compile:**
+**3. Compile:**
 
 ```bash
 compact compile contracts/my-token.compact contracts/managed/my-token
 ```
+
+**4. Deploy** with the four constructor arguments (admin pubkey, name, symbol,
+decimals). The witness side is wired by your DApp:
+
+- `getAdminSecret()` — the admin's private `Bytes<32>` (kept in DApp state)
+- `getUserSecret()` — each user's private `Bytes<32>`
+- `initialAdmin: AdminPublicKey` — computed off chain as
+  `persistentHash([pad(32, "erc20:admin:v1"), adminSecretBytes])`
 
 </Accordion>
 
 ## What's Next
 
 <CardGroup cols={2}>
-  <Card title="NFT (ERC721)" icon="image" href="/basics/erc721-nft">
+  <Card title="NFT (ERC721)" icon="image" href="/applications/erc721-nft">
     Create unique, non-fungible tokens
   </Card>
   <Card
     title="Multi-Token (ERC1155)"
     icon="layer-group"
-    href="/basics/erc1155-multitoken"
+    href="/applications/erc1155-multitoken"
   >
     Manage multiple token types in one contract
   </Card>

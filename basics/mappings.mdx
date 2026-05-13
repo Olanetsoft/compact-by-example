@@ -14,7 +14,7 @@ description: "Key-value storage using Map data structures."
 <Accordion title="View Contract Code">
 
 ```compact
-pragma language_version >= 0.17.0;
+pragma language_version >= 0.23;
 
 import CompactStandardLibrary;
 
@@ -43,13 +43,13 @@ export circuit addBalance(
     account: Either<ZswapCoinPublicKey, ContractAddress>,
     amount: Uint<128>
 ): [] {
+    const MAX_UINT128: Uint<128> = 340282366920938463463374607431768211455 as Uint<128>;
     const currentBalance = getBalance(account);
 
-    // Check for overflow
-    const MAX_UINT128 = 340282366920938463463374607431768211455 as Uint<128>;
+    // Check for overflow before casting back
     assert(currentBalance <= MAX_UINT128 - amount, "Balance overflow");
 
-    const newBalance = currentBalance + amount;
+    const newBalance: Uint<128> = (currentBalance + amount) as Uint<128>;
     balances.insert(disclose(account), disclose(newBalance));
 }
 
@@ -109,17 +109,24 @@ Use `insert(key, value)` to add or update an entry.
 ### Safe Arithmetic
 
 ```compact
+const MAX_UINT128: Uint<128> = 340282366920938463463374607431768211455 as Uint<128>;
 const currentBalance = getBalance(account);
 
-// Check for overflow before adding
-const MAX_UINT128 = 340282366920938463463374607431768211455 as Uint<128>;
+// Check for overflow before casting the widened sum back to Uint<128>
 assert(currentBalance <= MAX_UINT128 - amount, "Balance overflow");
 
-const newBalance = currentBalance + amount;
+const newBalance: Uint<128> = (currentBalance + amount) as Uint<128>;
 balances.insert(disclose(account), disclose(newBalance));
 ```
 
-Always validate before modifying balances to prevent overflow and underflow.
+Compact arithmetic widens the result type, so the sum must be **asserted to fit and then explicitly cast back** to `Uint<128>` before storing. See [Overflow Protection](/basics/overflow-protection).
+
+<Warning>
+  **`setBalance` and `addBalance` have no authentication.** Anyone can overwrite
+  any account's balance. The pattern here is for illustration; production token
+  contracts must gate writes with the [Access Control](/basics/access-control)
+  keypair pattern.
+</Warning>
 
 ## Common Patterns
 

@@ -1,87 +1,114 @@
 ---
 title: "Burning Tokens"
 sidebarTitle: "Burning"
-description: "Destroy tokens to reduce total supply."
+description: "Destroy tokens to reduce total supply. Self-burn and delegated burn via allowance."
 "og:title": "Burning Tokens - Compact by Example"
-"og:description": "Token burning for deflationary tokenomics and supply management"
+"og:description": "Token burning with witness-derived authentication and allowance enforcement"
 "twitter:card": "summary_large_image"
 "twitter:title": "Burning Tokens - Compact by Example"
-"twitter:description": "Token burning for deflationary tokenomics and supply management"
+"twitter:description": "Token burning with witness-derived authentication and allowance enforcement"
 ---
+
+<Warning>
+  Self-burn authenticates the caller as the account being burned. Delegated
+  burn (`burnFrom`) authenticates the caller as the spender and enforces a
+  prior allowance. Both use the witness-derived keypair pattern from
+  [Access Control](/basics/access-control).
+</Warning>
 
 ## The Contract
 
 <Accordion title="View Contract Code">
 
 ```compact
-pragma language_version >= 0.17.0;
+pragma language_version >= 0.23;
 
 import CompactStandardLibrary;
 
-// Account balances
-export ledger balances: Map<Either<ZswapCoinPublicKey, ContractAddress>, Uint<128>>;
+struct UserSecretKey { bytes: Bytes<32>; }
+struct UserPublicKey { bytes: Bytes<32>; }
+witness getUserSecret(): UserSecretKey;
 
-// Total token supply
-export ledger totalSupply: Uint<128>;
+export ledger _balances: Map<UserPublicKey, Uint<128>>;
+export ledger _allowances: Map<UserPublicKey, Map<UserPublicKey, Uint<128>>>;
+export ledger _totalSupply: Uint<128>;
 
-// Get total circulating supply
+export circuit deriveUserPublicKey(sk: UserSecretKey): UserPublicKey {
+    return UserPublicKey {
+        bytes: persistentHash<Vector<2, Bytes<32>>>([
+            pad(32, "myapp:user:v1"),
+            sk.bytes
+        ])
+    };
+}
+
 export circuit getTotalSupply(): Uint<128> {
-    return totalSupply;
+    return _totalSupply;
 }
 
-// Burn your own tokens
+// Burn your own tokens — the caller proves they hold the secret behind
+// the account whose balance is being burned.
 export circuit burn(amount: Uint<128>): [] {
-    const account = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
+    const account = disclose(deriveUserPublicKey(getUserSecret()));
     _burn(account, amount);
 }
 
-// Burn tokens from another account (with approval)
-export circuit burnFrom(
-    account: Either<ZswapCoinPublicKey, ContractAddress>,
-    amount: Uint<128>
-): [] {
-    const spender = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
-
-    // Check and spend allowance (requires approval system)
+// Burn tokens from another account using an allowance.
+// The caller (spender) authenticates via their own witness secret;
+// the allowance from `account` to that spender is decremented.
+export circuit burnFrom(account: UserPublicKey, amount: Uint<128>): [] {
+    const spender = disclose(deriveUserPublicKey(getUserSecret()));
     _spendAllowance(account, spender, amount);
-
     _burn(account, amount);
 }
 
-// Internal: Burn tokens
-circuit _burn(
-    account: Either<ZswapCoinPublicKey, ContractAddress>,
-    amount: Uint<128>
-): [] {
-    // Get current balance
+// Internal: burn tokens (assumes caller authentication happened above)
+circuit _burn(account: UserPublicKey, amount: Uint<128>): [] {
     const currentBalance = getBalance(account);
-
-    // Check sufficient balance
     assert(currentBalance >= amount, "Burn amount exceeds balance");
+    assert(_totalSupply >= amount, "Burn amount exceeds total supply");
 
-    // Decrease account balance
-    balances.insert(disclose(account), disclose(currentBalance - amount));
-
-    // Decrease total supply
-    totalSupply = disclose(totalSupply - amount);
+    _balances.insert(disclose(account), disclose(currentBalance - amount));
+    _totalSupply = disclose(_totalSupply - amount);
 }
 
-// Helper: Get balance
-circuit getBalance(account: Either<ZswapCoinPublicKey, ContractAddress>): Uint<128> {
-    if (!balances.member(disclose(account))) {
-        return 0;
-    }
-    return balances.lookup(disclose(account));
-}
-
-// Helper: Spend allowance (simplified - see Approval tutorial for full implementation)
+// Internal: read & decrement allowance (with infinite-approval shortcut)
 circuit _spendAllowance(
-    owner: Either<ZswapCoinPublicKey, ContractAddress>,
-    spender: Either<ZswapCoinPublicKey, ContractAddress>,
+    owner: UserPublicKey,
+    spender: UserPublicKey,
     amount: Uint<128>
 ): [] {
-    // Check allowance and decrease it
-    // See Approval & Allowance tutorial for complete implementation
+    const current = allowance(owner, spender);
+    const MAX_UINT128: Uint<128> = 340282366920938463463374607431768211455 as Uint<128>;
+    if (current < MAX_UINT128) {
+        assert(current >= amount, "Insufficient allowance");
+        _approve(owner, spender, current - amount);
+    }
+}
+
+// Internal: write the allowance entry
+circuit _approve(
+    owner: UserPublicKey,
+    spender: UserPublicKey,
+    amount: Uint<128>
+): [] {
+    if (!_allowances.member(disclose(owner))) {
+        _allowances.insert(disclose(owner), default<Map<UserPublicKey, Uint<128>>>);
+    }
+    _allowances.lookup(disclose(owner)).insert(disclose(spender), disclose(amount));
+}
+
+// Read remaining allowance
+export circuit allowance(owner: UserPublicKey, spender: UserPublicKey): Uint<128> {
+    if (!_allowances.member(disclose(owner))) { return 0; }
+    if (!_allowances.lookup(disclose(owner)).member(disclose(spender))) { return 0; }
+    return _allowances.lookup(disclose(owner)).lookup(disclose(spender));
+}
+
+// Helper
+circuit getBalance(account: UserPublicKey): Uint<128> {
+    if (!_balances.member(disclose(account))) { return 0; }
+    return _balances.lookup(disclose(account));
 }
 ```
 
@@ -89,78 +116,49 @@ circuit _spendAllowance(
 
 ## How It Works
 
-### Burning Process
-
-```compact
-circuit _burn(
-    account: Either<ZswapCoinPublicKey, ContractAddress>,
-    amount: Uint<128>
-): [] {
-    // Get current balance
-    const currentBalance = getBalance(account);
-
-    // Check sufficient balance
-    assert(currentBalance >= amount, "Burn amount exceeds balance");
-
-    // Decrease account balance
-    balances.insert(disclose(account), disclose(currentBalance - amount));
-
-    // Decrease total supply
-    totalSupply = disclose(totalSupply - amount);
-}
-```
-
-Burning flow:
-
-1. **Get current balance**: Check how many tokens account has
-2. **Check sufficient balance**: Ensure account has enough tokens to burn
-3. **Decrease account balance**: Remove tokens from account
-4. **Decrease total supply**: Remove tokens from circulation
-
-**Result**: Tokens are permanently destroyed and removed from total supply.
-
-### Burning Your Own Tokens
+### Self-burn authenticates the burner
 
 ```compact
 export circuit burn(amount: Uint<128>): [] {
-    const account = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
+    const account = disclose(deriveUserPublicKey(getUserSecret()));
     _burn(account, amount);
 }
 ```
 
-Users can always burn their own tokens:
+The caller proves knowledge of the secret behind the account whose balance is
+being burned. Reading the chain gives an attacker the *hash* of the secret,
+not the secret itself.
 
-- **`ownPublicKey()`**: Automatically gets caller's address
-- **Self-burn**: No approval needed to burn your own tokens
-- **Deflationary**: Reduces circulating supply permanently
-- **Voluntary**: Anyone can choose to burn their tokens
-
-### Delegated Burning
+### `burnFrom` enforces an allowance
 
 ```compact
-export circuit burnFrom(
-    account: Either<ZswapCoinPublicKey, ContractAddress>,
-    amount: Uint<128>
-): [] {
-    const spender = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
-
-    // Check allowance (requires approval system)
+export circuit burnFrom(account: UserPublicKey, amount: Uint<128>): [] {
+    const spender = disclose(deriveUserPublicKey(getUserSecret()));
     _spendAllowance(account, spender, amount);
-
     _burn(account, amount);
 }
 ```
 
-Burn someone else's tokens (with their approval):
+Same idea as `transferFrom` but the destination is the burn (no `to`
+parameter). The spender must have a non-zero `_allowances[account][spender]`
+entry of at least `amount`.
 
-- **Requires approval**: Account must first approve the burner (see [Approval tutorial](/basics/approval))
-- **Useful for contracts**: Contracts that burn tokens as part of their logic
-- **Spends allowance**: Decreases the approved amount
+### Invariants
 
-<Note>
-  **Use case**: A staking contract that burns tokens when users stake, or a
-  buyback contract that burns purchased tokens.
-</Note>
+- `currentBalance >= amount` — caller can't burn more than they hold.
+- `_totalSupply >= amount` — defensive check; should always hold given the
+  previous invariant, but cheap to assert.
+- Both writes happen in sequence so `sum(balances) == _totalSupply` stays
+  true.
+
+## Privacy Note
+
+<Warning>
+  Each burn writes `account` and `amount` to the public ledger. The
+  account-model design is deliberately transparent. For private deflationary
+  mechanisms, use shielded primitives where amounts and identities stay in
+  ZK-committed UTXOs.
+</Warning>
 
 ## What's Next
 

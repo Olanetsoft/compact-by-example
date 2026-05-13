@@ -1,71 +1,83 @@
 ---
 title: "Transfer Function"
 sidebarTitle: "Transfer"
-description: "Move tokens between accounts securely."
+description: "Move tokens between accounts with witness-derived keypair authentication."
 "og:title": "Transfer Function - Compact by Example"
-"og:description": "Transfer tokens with authorization and balance validation"
+"og:description": "Transfer tokens authenticated via witness-derived keypairs"
 "twitter:card": "summary_large_image"
 "twitter:title": "Transfer Function - Compact by Example"
-"twitter:description": "Transfer tokens with authorization and balance validation"
+"twitter:description": "Transfer tokens authenticated via witness-derived keypairs"
 ---
+
+<Warning>
+  **`ownPublicKey()` is not authentication.** Anyone reading the chain can copy
+  a public key and supply it as `ownPublicKey()` in a new transaction. To
+  authenticate the caller, prove knowledge of a witness-held secret whose hash
+  matches a stored public key — the [Access Control](/basics/access-control)
+  pattern. This page builds the transfer function on top of that pattern.
+</Warning>
 
 ## The Contract
 
 <Accordion title="View Contract Code">
 
 ```compact
-pragma language_version >= 0.17.0;
+pragma language_version >= 0.23;
 
 import CompactStandardLibrary;
 
-// Account balances
-export ledger balances: Map<Either<ZswapCoinPublicKey, ContractAddress>, Uint<128>>;
+// Witness-derived keypair used to authenticate the caller.
+// The DApp generates the secret per user and keeps it in private state.
+struct UserSecretKey { bytes: Bytes<32>; }
+struct UserPublicKey { bytes: Bytes<32>; }
+witness getUserSecret(): UserSecretKey;
 
-// Transfer tokens from sender to recipient
-export circuit transfer(
-    to: Either<ZswapCoinPublicKey, ContractAddress>,
-    amount: Uint<128>
-): Boolean {
-    // Get sender (caller of this function)
-    const from = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
+// Balances keyed by the user's authenticated public key
+export ledger _balances: Map<UserPublicKey, Uint<128>>;
 
-    // Perform the transfer
-    _transfer(from, to, amount);
+// Derive the on-chain identifier from the witness secret
+export circuit deriveUserPublicKey(sk: UserSecretKey): UserPublicKey {
+    return UserPublicKey {
+        bytes: persistentHash<Vector<2, Bytes<32>>>([
+            pad(32, "myapp:user:v1"),
+            sk.bytes
+        ])
+    };
+}
 
+// Transfer tokens from the caller to `to`.
+// The caller proves they hold the secret behind their balance entry.
+export circuit transfer(to: UserPublicKey, amount: Uint<128>): Boolean {
+    const sender = disclose(deriveUserPublicKey(getUserSecret()));
+    _transfer(sender, to, amount);
     return true;
 }
 
-// Internal transfer logic
+// Internal transfer logic (no caller authentication; only callable by
+// authenticated wrappers above and by the allowance flow).
 circuit _transfer(
-    from: Either<ZswapCoinPublicKey, ContractAddress>,
-    to: Either<ZswapCoinPublicKey, ContractAddress>,
+    sender: UserPublicKey,
+    to: UserPublicKey,
     amount: Uint<128>
 ): [] {
-    // Get current balances
-    const fromBalance = getBalance(from);
-    const toBalance = getBalance(to);
+    const MAX_UINT128: Uint<128> = 340282366920938463463374607431768211455 as Uint<128>;
 
-    // Check sufficient balance
+    const fromBalance = getBalance(sender);
     assert(fromBalance >= amount, "Insufficient balance");
 
-    // Check for overflow on receiver
-    const MAX_UINT128 = 340282366920938463463374607431768211455 as Uint<128>;
+    const toBalance = getBalance(to);
     assert(toBalance <= MAX_UINT128 - amount, "Balance overflow");
 
-    // Update balances atomically
-    const newFromBalance = fromBalance - amount;
-    const newToBalance = toBalance + amount;
-
-    balances.insert(disclose(from), disclose(newFromBalance));
-    balances.insert(disclose(to), disclose(newToBalance));
+    _balances.insert(disclose(sender), disclose(fromBalance - amount));
+    _balances.insert(disclose(to), disclose((toBalance + amount) as Uint<128>));
 }
 
-// Helper: Get balance (returns 0 if not found)
-circuit getBalance(account: Either<ZswapCoinPublicKey, ContractAddress>): Uint<128> {
-    if (!balances.member(disclose(account))) {
+// Helper: read a user's balance (returns 0 if unset)
+export circuit getBalance(account: UserPublicKey): Uint<128> {
+    if (!_balances.member(disclose(account))) {
         return 0;
     }
-    return balances.lookup(disclose(account));
+    return _balances.lookup(disclose(account));
 }
 ```
 
@@ -73,72 +85,70 @@ circuit getBalance(account: Either<ZswapCoinPublicKey, ContractAddress>): Uint<1
 
 ## How It Works
 
-### Authorization with ownPublicKey()
+### Authentication via witness-derived keypair
 
 ```compact
-export circuit transfer(
-    to: Either<ZswapCoinPublicKey, ContractAddress>,
-    amount: Uint<128>
-): Boolean {
-    const from = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
-    _transfer(from, to, amount);
+export circuit transfer(to: UserPublicKey, amount: Uint<128>): Boolean {
+    const sender = disclose(deriveUserPublicKey(getUserSecret()));
+    _transfer(sender, to, amount);
     return true;
 }
 ```
 
-The `transfer()` function automatically uses the caller's identity:
+To call `transfer`, the caller must produce a ZK proof that they know a
+`UserSecretKey` whose hash matches the on-chain `UserPublicKey` they're
+spending from. The on-chain balance is keyed by the **hash of the secret**;
+reading the chain gives an attacker the hash, not the preimage.
 
-- **`ownPublicKey()`**: Built-in function that returns the public key of whoever called this circuit
-- **Implicit authorization**: No one can transfer from someone else's account
-- **User calls `transfer(recipient, amount)`**: Their own address is automatically the sender
-
-<Note>
-  **Security**: Users never specify "from" in basic transfers. The contract gets
-  it from `ownPublicKey()`, preventing unauthorized transfers.
-</Note>
-
-### Balance Checks
+Compare with the broken pattern (do **not** use):
 
 ```compact
-const fromBalance = getBalance(from);
-assert(fromBalance >= amount, "Insufficient balance");
+// ❌ Authentication does NOT work this way
+const sender = left<ZswapCoinPublicKey, ContractAddress>(ownPublicKey());
 ```
 
-Verify the sender has enough tokens:
+`ownPublicKey()` returns whatever value the prover claims to know. An attacker
+reads `sender` from the chain, supplies it as their own `ownPublicKey()`, and
+produces a valid proof. See [Access Control](/basics/access-control#anti-pattern-ownpublickey-as-authorization).
 
-- **Read first**: Get current balance from Map
-- **Validate**: Ensure sufficient funds
-- **Clear error**: Tell user why transfer failed
-
-### Overflow Protection
+### Balance and overflow checks
 
 ```compact
+const fromBalance = getBalance(sender);
+assert(fromBalance >= amount, "Insufficient balance");
+
 const toBalance = getBalance(to);
-const MAX_UINT128 = 340282366920938463463374607431768211455 as Uint<128>;
 assert(toBalance <= MAX_UINT128 - amount, "Balance overflow");
 ```
 
-Prevent integer overflow on the receiver - ensure the addition won't wrap around to 0.
+Read both balances, assert the sender has enough, and assert the recipient's
+new balance won't overflow `Uint<128>`. See [Overflow Protection](/basics/overflow-protection).
 
-See [Overflow Protection](/basics/overflow-protection) for detailed arithmetic safety patterns.
-
-### Atomic Updates
+### Cast back to `Uint<128>` on store
 
 ```compact
-const newFromBalance = fromBalance - amount;
-const newToBalance = toBalance + amount;
-
-balances.insert(disclose(from), disclose(newFromBalance));
-balances.insert(disclose(to), disclose(newToBalance));
+_balances.insert(disclose(to), disclose((toBalance + amount) as Uint<128>));
 ```
 
-Update both balances in sequence:
+Compact arithmetic widens the result type. After the overflow assertion, the
+sum is explicitly cast back to `Uint<128>` before being stored.
 
-- **Calculate first**: Compute new values before writing
-- **Write together**: Both updates happen in same transaction
-- **All-or-nothing**: If one fails, entire transaction reverts
+## Privacy Note
 
-The transfer is atomic - either both accounts update or neither does.
+<Warning>
+  **This contract publishes the full participant graph.** `_balances` is
+  keyed by `UserPublicKey`, every transfer discloses both `sender` and `to`,
+  and the inserted amount is also disclosed. Anyone reading the ledger sees
+  the complete history of who paid whom and how much.
+
+  This is the *account-model* privacy profile. For payments where senders,
+  recipients, and amounts must be private, use Midnight's shielded token
+  primitives (`sendShielded`, `mintShieldedToken`, etc.) — they're built on
+  UTXOs and ZK commitments and don't leak the participant graph. The
+  account-model pattern shown here is appropriate for *registries* where
+  participants are intentionally public (game leaderboards, public reward
+  programs, etc.).
+</Warning>
 
 ## What's Next
 

@@ -14,7 +14,7 @@ description: "Basic data types: Uint, Field, Bytes, and Opaque."
 <Accordion title="View Contract Code">
 
 ```compact
-pragma language_version 0.16;
+pragma language_version >= 0.23;
 
 import CompactStandardLibrary;
 
@@ -30,27 +30,29 @@ export ledger commitment: Field;
 // Fixed-length byte array
 export ledger hash: Bytes<32>;
 
-// Opaque type for private data
+// Opaque type - hashed inside circuits, full value visible off-chain
 export ledger secretValue: Opaque<"string">;
 
 export circuit updateCounter(newValue: Uint<0..1000>): [] {
-  disclose(counter = newValue);
+  counter = disclose(newValue);
 }
 
 export circuit updateBalance(amount: Uint<32>): [] {
-  disclose(balance = balance + amount);
+  // a + b widens; assert no overflow, then cast back to Uint<32>
+  assert(balance <= (4294967295 as Uint<32>) - amount, "balance overflow");
+  balance = disclose((balance + amount) as Uint<32>);
 }
 
 export circuit storeCommitment(value: Field): [] {
-  disclose(commitment = value);
+  commitment = disclose(value);
 }
 
 export circuit storeHash(data: Bytes<32>): [] {
-  disclose(hash = data);
+  hash = disclose(data);
 }
 
 export circuit updateSecret(secret: Opaque<"string">): [] {
-  disclose(secretValue = secret);
+  secretValue = disclose(secret);
 }
 ```
 
@@ -72,7 +74,7 @@ export ledger counter: Uint<0..1000>;
 export ledger balance: Uint<32>;
 ```
 
-`Uint<n>` uses up to `n` bits, equivalent to `Uint<0..(2^n - 1)>`.
+`Uint<n>` uses up to `n` bits, equivalent to `Uint<0..(2^n - 1)>`. The maximum width is `Uint<248>`.
 
 ### Field Type
 
@@ -80,7 +82,7 @@ export ledger balance: Uint<32>;
 export ledger commitment: Field;
 ```
 
-Elements in the scalar prime field for zero-knowledge computations. Arithmetic wraps around (modulo).
+Elements of the scalar prime field used by the ZK proof system. Arithmetic on `Field` wraps modulo the prime. Comparison operators (`<`, `<=`) are **not** defined on `Field`; convert to a `Uint` first if you need ordering.
 
 ### Bytes Type
 
@@ -96,15 +98,41 @@ Fixed-length byte arrays. `Bytes<n>` for exactly `n` bytes.
 export ledger secretValue: Opaque<"string">;
 ```
 
-Values opaque to circuits, represented by their hash. For private data.
+`Opaque<"label">` is a value whose internal representation is **opaque to circuit logic**: the circuit can hash it, store it, and pass it around, but cannot read or branch on its contents. The witness layer holds the real bytes; the ZK proof commits to the hash.
+
+### Disclosure Rule for Circuit Parameters
+
+```compact
+counter = disclose(newValue);
+```
+
+Compact's privacy model is conservative: any circuit parameter is treated as **potentially witness-derived** at compile time. Writing a parameter directly to ledger state without `disclose()` fails with:
+
+```
+potential witness-value disclosure must be declared but is not
+```
+
+This applies to every type — `Uint`, `Field`, `Bytes`, and `Opaque` alike. `disclose(x)` is a compiler annotation that says "I know this value flows from a (potentially) private source to a public location and that's intentional."
+
+See [Privacy & Disclosure](/basics/hello-world) for more on the disclosure rule.
+
+### Arithmetic Widening and Casts
+
+Compact has no silent overflow. Arithmetic on bounded integers produces a **wider** result type:
+
+```compact
+balance = disclose((balance + amount) as Uint<32>);   // assert first, then cast
+```
+
+See [Overflow Protection](/basics/overflow-protection) for the full pattern.
 
 ### Boolean Type
 
 ```compact
-const flag: Boolean = true;
+export ledger flag: Boolean;
 ```
 
-Two values: `true` and `false`.
+Two values: `true` and `false`. Standard operators: `&&`, `||`, `!`, `==`, `!=`.
 
 ## What's Next
 
