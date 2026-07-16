@@ -98,7 +98,7 @@ Fixed-length byte arrays. `Bytes<n>` for exactly `n` bytes.
 export ledger secretValue: Opaque<"string">;
 ```
 
-`Opaque<"label">` is a value whose internal representation is **opaque to circuit logic**: the circuit can hash it, store it, and pass it around, but cannot read or branch on its contents. The witness layer holds the real bytes; the ZK proof commits to the hash.
+`Opaque<"label">` is a value whose internal representation is **opaque to circuit logic**: the circuit can hash it, store it, pass it around, and compare it for equality (`==`, `!=`), but cannot do arithmetic on it or inspect individual bytes. The witness layer holds the real bytes; inside the circuit the value is represented by its hash.
 
 ### Disclosure Rule for Circuit Parameters
 
