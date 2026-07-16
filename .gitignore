@@ -43,3 +43,7 @@ temp/
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Local tooling working directories
+.claude/
+.midnight-expert/
