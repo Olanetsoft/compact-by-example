@@ -36,7 +36,7 @@ We're always looking for new examples that demonstrate Compact features and patt
 
 1. **Choose the right category** - Pick the appropriate directory (basics, applications, or other)
 2. **Create the MDX file** - Follow the concise template structure below
-3. **Write complete, working code** - All examples must compile with the current Compact compiler (v0.31.0 at time of writing, pragma `>= 0.23`). Run `compact compile --skip-zk` against the snippet before submitting.
+3. **Write complete, working code** - All examples must compile with the current Compact compiler (v0.31.1 at time of writing, pragma `>= 0.23`). Run `compact compile --skip-zk` against the snippet before submitting.
 4. **Keep it concise** - No verbose sections, just code and brief explanations
 5. **Add to navigation** - Update `docs.json` to include your example
 6. **Submit a Pull Request** - Include a clear description of what the example teaches
@@ -182,10 +182,10 @@ pragma language_version >= 0.23;
 import CompactStandardLibrary;
 
 // 2. Ledger state variables
-export ledger state: Opaque<"example">;
+export ledger state: Opaque<"string">;
 
 // 3. Circuits (functions)
-export circuit updateState(input: Opaque<"example">): [] {
+export circuit updateState(input: Opaque<"string">): [] {
   state = disclose(input);
 }
 ```

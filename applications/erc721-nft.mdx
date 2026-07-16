@@ -303,7 +303,8 @@ bytes.
 
 - **`safeTransferFrom`** and **`onERC721Received`** — Compact has no
   contract-to-contract call yet, so the unsafe-vs-safe distinction is moot.
-- **ERC721 events** — Compact has no event/log primitive. Off-chain
+- **ERC721 events** — Compact has no event/log primitive yet (contract log
+  events per MIP-0002 are arriving in newer toolchains). For now, off-chain
   indexers must read state directly.
 - **Enumerable extension** — Compact has no iteration over Map keys; if you
   need `tokenOfOwnerByIndex`, track an auxiliary list explicitly.

@@ -9,15 +9,15 @@ description: "Install Lace wallet, Compact compiler, and Docker proof server for
 "twitter:description": "Install tools for Compact development on Midnight Network"
 ---
 
-## Install the Lace Midnight Preview wallet
+## Install the Lace wallet
 
 ### 1. Download and install the Lace wallet extension
 
-Lace Midnight Preview wallet is a browser extension wallet for the Midnight network. It is currently only compatible with Google Chrome.
+Lace is a browser extension wallet with built-in Midnight support (including mainnet). These steps use Google Chrome; Lace is also available for Brave and Firefox.
 
 1. **Open the Google Chrome browser** - Launch Chrome on your computer.
 
-2. **Install the Lace wallet extension** - Visit the Chrome Web Store: [Lace Beta Extension](https://chromewebstore.google.com/detail/lace-beta/hgeekaiplokcnmakghbdfbgnlfheichg)
+2. **Install the Lace wallet extension** - Visit the Chrome Web Store: [Lace](https://chromewebstore.google.com/detail/lace/gafhhkghbfjjkeiendhlofajokpaflmk)
 
 3. **Add to Chrome** - Click **Add to Chrome** and confirm by clicking **Add extension**.
 
@@ -34,12 +34,14 @@ Lace Midnight Preview wallet is a browser extension wallet for the Midnight netw
 3. Save your seed phrase securely (never store digitally).
 4. Confirm seed phrase.
 
-### 3. Get test tokens (tDUST)
+### 3. Get test tokens (tNIGHT and tDUST)
 
 1. Copy your wallet address from Lace.
-2. Visit [https://midnight.network/test-faucet/](https://midnight.network/test-faucet/)
-3. Paste address and click **Request tDUST**.
-4. Wait for tokens to arrive.
+2. Visit the faucet for your target network:
+   - **Preprod** (recommended for development): [https://midnight-tmnight-preprod.nethermind.dev/](https://midnight-tmnight-preprod.nethermind.dev/)
+   - **Preview**: [https://midnight-tmnight-preview.nethermind.dev/](https://midnight-tmnight-preview.nethermind.dev/)
+3. Paste your address and request **tNIGHT**.
+4. Once the tNIGHT arrives, open Lace and delegate it (**Generate tDUST**) to produce tDUST for transaction fees.
 
 ## Install Compact
 
@@ -51,7 +53,7 @@ The Compact developer CLI (`compact`) manages compiler versions, formatting, and
 curl --proto '=https' --tlsv1.2 -LsSf https://github.com/midnightntwrk/compact/releases/latest/download/compact-installer.sh | sh
 ```
 
-The installer adds `compact` to `$HOME/.compact/bin` and updates your shell rc file (`~/.bashrc` or `~/.zshrc`).
+The installer adds `compact` to `$HOME/.local/bin` (or your XDG bin directory) and updates your shell rc file (`~/.bashrc` or `~/.zshrc`). Compiler toolchains downloaded by `compact update` are managed under `$HOME/.compact`.
 
 ### 5. Activate the new PATH
 
@@ -73,7 +75,7 @@ The CLI is a *manager*; you still need to install a Compact compiler:
 compact self update        # ensure CLI is on the latest version
 compact update             # download the latest compiler
 compact --version          # prints the CLI version
-compact compile --version  # prints the compiler version (e.g. 0.31.0)
+compact compile --version  # prints the compiler version (e.g. 0.31.1)
 ```
 
 <Check>
@@ -122,17 +124,19 @@ docker --version
 
 ### 8. Run the proof server
 
-Pin a specific image tag so behavior is reproducible. Check the [proof-server releases](https://github.com/midnightntwrk/midnight-node-docker) for the current tag, then run:
+Pin a specific image tag so behavior is reproducible. Check the [proof server tags on Docker Hub](https://hub.docker.com/r/midnightntwrk/proof-server/tags) and the [compatibility matrix](https://docs.midnight.network/relnotes/support-matrix) for the current version (8.1.0 for preview/preprod at the time of writing), then run:
 
 ```bash
-docker run -p 6300:6300 midnightnetwork/proof-server:latest -- 'midnight-proof-server --network testnet'
+docker run -p 6300:6300 midnightntwrk/proof-server:latest midnight-proof-server -v
 ```
+
+The proof server is network-agnostic — it takes no network argument. The same command serves preview, preprod, or mainnet; network selection happens in your DApp and wallet configuration.
 
 Keep this terminal open when developing. The proof server listens on `localhost:6300`.
 
 ## Install Compact VS Code extension
 
-Download the VSIX from [releases page](https://github.com/midnightntwrk/compact/releases).
+The extension is not on the VS Code Marketplace; it is distributed as a VSIX. Download the current VSIX from the [official VS Code plugin page](https://docs.midnight.network/compact/compilation-and-tooling/vscode-plugin).
 
 Install in VS Code: **Extensions** → `...` → **Install from VSIX**
 
