@@ -90,6 +90,10 @@ Read our [Contributing Guide](./CONTRIBUTING.md) for detailed instructions.
 
 - [Midnight Documentation](https://docs.midnight.network) - Official docs
 
+## Acknowledgments
+
+This site is built with [Mintlify](https://mintlify.com) and started from their documentation starter template.
+
 ## License
 
 MIT - see [LICENSE](./LICENSE) file for details.

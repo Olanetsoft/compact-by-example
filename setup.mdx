@@ -128,7 +128,7 @@ docker --version
 Pin a specific image tag so behavior is reproducible. Check the [proof server tags on Docker Hub](https://hub.docker.com/r/midnightntwrk/proof-server/tags) and the [compatibility matrix](https://docs.midnight.network/relnotes/support-matrix) for the current version (8.1.0 for preview/preprod at the time of writing), then run:
 
 ```bash
-docker run -p 6300:6300 midnightntwrk/proof-server:latest midnight-proof-server -v
+docker run -p 6300:6300 midnightntwrk/proof-server:8.1.0 midnight-proof-server -v
 ```
 
 The proof server is network-agnostic — it takes no network argument. The same command serves preview, preprod, or mainnet; network selection happens in your DApp and wallet configuration.
